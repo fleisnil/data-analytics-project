@@ -58,6 +58,17 @@ PARAMETER_MAP = {
     "prestas0": "station_pressure_hpa",
 }
 
+# These four variables are the core weather predictors for the project.
+# MeteoSwiss can publish a newest timestamp before all parameters for that
+# timestamp are populated. We therefore prefer the latest row where all core
+# variables are available instead of blindly taking the final CSV row.
+CORE_PARAMETER_COLUMNS = [
+    "tre200s0",
+    "rre150z0",
+    "ure200s0",
+    "fu3010z0",
+]
+
 
 def station_url(station_abbr: str) -> str:
     """Return the MeteoSwiss current 10-minute CSV URL for one station."""
@@ -129,7 +140,49 @@ def latest_measurement(
     if df.empty:
         raise ValueError("No valid MeteoSwiss measurement timestamps found.")
 
-    latest = df.iloc[[-1]].copy()
+    # Convert the weather parameters before testing completeness. This also
+    # converts placeholders/non-numeric values to NaN.
+    for source_column in PARAMETER_MAP:
+        if source_column in df.columns:
+            df[source_column] = pd.to_numeric(
+                df[source_column],
+                errors="coerce",
+            )
+
+    available_core = [
+        column
+        for column in CORE_PARAMETER_COLUMNS
+        if column in df.columns
+    ]
+
+    if not available_core:
+        raise ValueError("None of the required core weather parameters found.")
+
+    df["_core_parameter_count"] = df[available_core].notna().sum(axis=1)
+
+    # Preferred case: choose the newest row with all four core parameters.
+    if len(available_core) == len(CORE_PARAMETER_COLUMNS):
+        complete_core = df[df[available_core].notna().all(axis=1)]
+    else:
+        complete_core = df.iloc[0:0]
+
+    if not complete_core.empty:
+        latest = complete_core.iloc[[-1]].copy()
+        selection_method = "latest_core_complete"
+    else:
+        # Robust fallback: use the newest row among those with the highest
+        # number of available core parameters. The completeness flag below
+        # makes this visible in the saved dataset.
+        max_count = int(df["_core_parameter_count"].max())
+        best_rows = df[df["_core_parameter_count"] == max_count]
+        latest = best_rows.iloc[[-1]].copy()
+        selection_method = "latest_best_available"
+
+    core_parameter_count = int(latest["_core_parameter_count"].iloc[0])
+    core_complete = (
+        len(available_core) == len(CORE_PARAMETER_COLUMNS)
+        and core_parameter_count == len(CORE_PARAMETER_COLUMNS)
+    )
 
     row = {
         "collection_timestamp": pd.to_datetime(collection_timestamp, utc=True),
@@ -137,15 +190,15 @@ def latest_measurement(
         "weather_station_abbr": station_abbr,
         "weather_station_name": station_name,
         "reference_timestamp": latest["reference_timestamp"].iloc[0],
+        "weather_selection_method": selection_method,
+        "weather_core_complete": core_complete,
+        "weather_core_parameter_count": core_parameter_count,
         "source_url": source_url,
     }
 
     for source_column, output_column in PARAMETER_MAP.items():
         if source_column in latest.columns:
-            row[output_column] = pd.to_numeric(
-                latest[source_column].iloc[0],
-                errors="coerce",
-            )
+            row[output_column] = latest[source_column].iloc[0]
         else:
             row[output_column] = pd.NA
 
@@ -244,9 +297,18 @@ def main() -> int:
                 ref_ts = df_station["reference_timestamp_local"].iloc[0]
                 age = df_station["weather_age_minutes"].iloc[0]
 
+                core_complete = bool(
+                    df_station["weather_core_complete"].iloc[0]
+                )
+                selection_method = (
+                    df_station["weather_selection_method"].iloc[0]
+                )
+
                 print(
                     f"  OK: measurement {ref_ts} "
-                    f"(age {age:.1f} min)"
+                    f"(age {age:.1f} min, "
+                    f"core_complete={core_complete}, "
+                    f"selection={selection_method})"
                 )
 
             except Exception as exc:
@@ -289,6 +351,7 @@ def main() -> int:
         "city",
         "weather_station_abbr",
         "reference_timestamp_local",
+        "weather_core_complete",
         "temperature_c",
         "precipitation_mm_10min",
         "relative_humidity_pct",
