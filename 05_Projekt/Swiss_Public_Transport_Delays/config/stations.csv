@@ -1,0 +1,26 @@
+station_name,station_id,region,canton,station_type
+Zürich HB,8503000,Zürich,ZH,rail_hub
+Zürich Bellevue,8576193,Zürich,ZH,urban_stop
+Winterthur,8506000,Zürich,ZH,rail_hub
+Bern,8507000,Espace Mittelland,BE,rail_hub
+Bern Zytglogge,8576646,Espace Mittelland,BE,urban_stop
+Biel/Bienne,8504300,Espace Mittelland,BE,rail_hub
+Fribourg/Freiburg,8504100,Espace Mittelland,FR,rail_hub
+Neuchâtel,8504221,Espace Mittelland,NE,rail_hub
+Basel SBB,8500010,Northwestern Switzerland,BS,rail_hub
+Basel Barfüsserplatz,8589331,Northwestern Switzerland,BS,urban_stop
+Olten,8500218,Northwestern Switzerland,SO,rail_hub
+Lausanne,8501120,Lake Geneva region,VD,rail_hub
+Lausanne Riponne-M. Béjart,8592050,Lake Geneva region,VD,urban_stop
+Genève,8501008,Lake Geneva region,GE,rail_hub
+Genève Bel-Air,8587057,Lake Geneva region,GE,urban_stop
+Sion,8501500,Lake Geneva region,VS,rail_hub
+Luzern,8505000,Central Switzerland,LU,rail_hub
+Luzern Bahnhof,8573205,Central Switzerland,LU,urban_stop
+St. Gallen,8506302,Eastern Switzerland,SG,rail_hub
+St. Gallen Marktplatz Bohl,8574091,Eastern Switzerland,SG,urban_stop
+Chur,8509000,Eastern Switzerland,GR,rail_hub
+Chur Postautostation,8574031,Eastern Switzerland,GR,urban_stop
+Lugano,8505300,Ticino,TI,rail_hub
+Lugano Stazione,8574680,Ticino,TI,urban_stop
+

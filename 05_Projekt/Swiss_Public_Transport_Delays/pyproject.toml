@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swiss-public-transport-delays"
+version = "0.1.0"
+description = "Reproducible analysis of factors associated with public-transport delays in Switzerland."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.4,<2",
+  "folium>=0.17,<1",
+  "jupyterlab>=4.2,<5",
+  "matplotlib>=3.9,<4",
+  "nbformat>=5.10,<6",
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<3",
+  "psycopg[binary]>=3.2,<4",
+  "python-dotenv>=1.0,<2",
+  "requests>=2.32,<3",
+  "scikit-learn>=1.5,<2",
+  "scipy>=1.14,<2",
+  "seaborn>=0.13,<1",
+  "SQLAlchemy>=2.0,<3",
+  "statsmodels>=0.14,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<9", "ruff>=0.6,<1"]
+
+[project.scripts]
+sptdelays = "sptdelays.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
