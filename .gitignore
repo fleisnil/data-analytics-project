@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Secrets / local configuration
+.env
+.env.*
+!.env.example
+
+# Generated OJP and MeteoSwiss collection data
+data/raw/ojp/
+data/raw/weather/
+data/interim/ojp_snapshots/
+data/interim/weather_snapshots/
+
+# Processed datasets are reproducible and should not bloat Git
+data/processed/*.csv
+data/processed/*.parquet
+
+# Generated analysis outputs
+results/figures/*
+results/tables/*
+results/model/*
+
+# Keep directory placeholders
+!results/figures/.gitkeep
+!results/tables/.gitkeep
+!results/model/.gitkeep
+!data/processed/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/settings.json
