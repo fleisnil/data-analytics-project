@@ -16,9 +16,12 @@ data/raw/weather/
 data/interim/ojp_snapshots/
 data/interim/weather_snapshots/
 
-# Processed datasets are reproducible and should not bloat Git
+# Processed datasets and local databases are reproducible outputs
 data/processed/*.csv
 data/processed/*.parquet
+data/database/*.sqlite
+data/database/*.sqlite-*
+data/database/*.db
 
 # Generated analysis outputs
 results/figures/*

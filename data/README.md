@@ -7,5 +7,6 @@ Generated collection files are intentionally excluded from normal Git tracking.
 - `interim/ojp_snapshots/`: combined OJP snapshots
 - `interim/weather_snapshots/`: combined weather snapshots
 - `processed/`: reproducible integrated analysis datasets
+- `database/`: locally generated SQLite database
 
 A small sample dataset may be committed deliberately for reproducibility, but the continuous collection output should not be added with `git add .`.

@@ -119,12 +119,22 @@ The analysis is intended to compare:
 
 ## 9. Database requirement
 
-A SQLite database will be created from Python for the minimum project requirement.
+SQLite is implemented in `src/database.py`.
 
-Planned tables include:
+The local database is generated at:
 
-- transport observations
-- weather observations
-- station/region metadata
+```text
+data/database/transport_weather.sqlite
+```
 
-SQL queries will be executed from Python and include aggregations and joins. PostgreSQL may be added later as a bonus extension.
+It contains:
+
+- `transport_observations`
+- `weather_observations`
+- `stations`
+
+The SQL view `transport_weather_joined` performs a real SQL join between the two independently collected sources. It matches each selected OJP observation to the newest MeteoSwiss observation in the same city that is not from the future and is at most 30 minutes old.
+
+SQL statements are stored in `sql/schema.sql` and `sql/analysis_queries.sql` and are executed from Python. The analysis queries include aggregations with `GROUP BY` as well as the cross-source SQL join.
+
+The SQLite database is reproducible and therefore ignored by Git. PostgreSQL may be added later as a bonus extension.

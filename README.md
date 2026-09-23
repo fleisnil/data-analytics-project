@@ -69,7 +69,9 @@ MeteoSwiss reference timestamps are UTC.
 ├── requirements.txt
 ├── src/
 │   ├── collect_all_stations.py
-│   └── collect_weather.py
+│   ├── collect_weather.py
+│   ├── build_dataset.py
+│   └── database.py
 ├── data/
 │   ├── raw/
 │   │   ├── ojp/
@@ -80,6 +82,8 @@ MeteoSwiss reference timestamps are UTC.
 │   └── processed/
 ├── notebooks/
 ├── sql/
+│   ├── schema.sql
+│   └── analysis_queries.sql
 ├── results/
 │   ├── figures/
 │   ├── tables/
@@ -120,6 +124,37 @@ python src/collect_weather.py
 ```
 
 MeteoSwiss Open Data does not require the OJP token.
+
+Build the integrated OJP + weather dataset:
+
+```bash
+python src/build_dataset.py
+```
+
+Build and validate the SQLite database:
+
+```bash
+python src/database.py
+```
+
+This creates `data/database/transport_weather.sqlite` locally and executes the documented SQL queries from `sql/analysis_queries.sql`. The SQLite file and generated result CSVs are reproducible outputs and are not committed to Git.
+
+Run the SQLite unit test:
+
+```bash
+python -m unittest tests/test_database.py -v
+```
+
+### SQLite structure
+
+The database contains:
+
+- `transport_observations` — one selected 5–15 minute pre-departure observation per journey/stop
+- `weather_observations` — deduplicated MeteoSwiss 10-minute measurements
+- `stations` — OJP and MeteoSwiss station metadata
+- `transport_weather_joined` — SQL view joining OJP and MeteoSwiss by city and the latest non-future weather timestamp within 30 minutes
+
+The SQL queries include row counts, city/mode delay summaries, weather-join quality, delay summaries with weather, and hourly delay summaries.
 
 ## Planned analytics pipeline
 
