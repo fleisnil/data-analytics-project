@@ -1,0 +1,25 @@
+{
+  "timezone": "Europe/Zurich",
+  "transport_api": "https://transport.opendata.ch/v1",
+  "actuals_dataset_page": "https://data.opentransportdata.swiss/en/dataset/ist-daten-v2",
+  "weather_archive_api": "https://archive-api.open-meteo.com/v1/archive",
+  "weather_forecast_api": "https://api.open-meteo.com/v1/forecast",
+  "weather_hourly_variables": [
+    "temperature_2m",
+    "precipitation",
+    "wind_speed_10m",
+    "wind_gusts_10m",
+    "snowfall"
+  ],
+  "delay_threshold_minutes": 5,
+  "maximum_plausible_delay_minutes": 180,
+  "live_stationboard_limit": 30,
+  "request_timeout_seconds": 45,
+  "request_pause_seconds": 0.35,
+  "random_seed": 42,
+  "study_target_service_days": 28,
+  "study_target_regions": 7,
+  "study_target_day_periods": 5,
+  "weather_coverage_target": 0.95
+}
+
