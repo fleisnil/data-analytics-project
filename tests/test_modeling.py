@@ -3,7 +3,13 @@ import pandas as pd
 import pytest
 
 from sptdelays import modeling
-from sptdelays.modeling import _holdout_coverage, _make_pipeline, _metrics, _split
+from sptdelays.modeling import (
+    _group_mean_baseline,
+    _holdout_coverage,
+    _make_pipeline,
+    _metrics,
+    _split,
+)
 from sptdelays.settings import ProjectPaths
 
 
@@ -57,6 +63,24 @@ def test_holdout_coverage_reports_categories_unseen_during_training():
     assert row.affected_test_fraction == pytest.approx(2 / 3)
 
 
+def test_group_baseline_uses_training_means_and_falls_back_for_sparse_groups():
+    train = pd.DataFrame({
+        "region": ["A"] * 10 + ["B"] * 2,
+        "transport_mode": ["bus"] * 12,
+        "day_period": ["midday"] * 12,
+        "delay_minutes": [2.0] * 10 + [8.0] * 2,
+    })
+    test = pd.DataFrame({
+        "region": ["A", "B", "C"],
+        "transport_mode": ["bus"] * 3,
+        "day_period": ["midday"] * 3,
+        "delay_minutes": [100.0] * 3,
+    })
+    predicted, fallback = _group_mean_baseline(train, test)
+    assert predicted.tolist() == pytest.approx([2.0, 3.0, 3.0])
+    assert fallback.tolist() == [False, True, True]
+
+
 import json
 
 import joblib
@@ -91,7 +115,7 @@ def test_model_run_exports_auditable_baselines_and_correct_log_interpretation(
     medians = fitted.named_steps["features"].named_transformers_["numeric"].statistics_
     assert medians[1] == 30.0  # median of training precipitation 1..59, not holdout 1000s
     subgroups = pd.read_csv(paths.tables / "subgroup_metrics.csv")
-    assert set(subgroups.model) == {"random_forest", "mean_baseline"}
+    assert set(subgroups.model) == {"random_forest", "mean_baseline", "group_mean_baseline"}
     assert subgroups.group.str.startswith("day_period:").any()
     coefficients = pd.read_csv(paths.tables / "ols_associations.csv")
     assert "approx_percent_change" not in coefficients
@@ -102,3 +126,4 @@ def test_model_run_exports_auditable_baselines_and_correct_log_interpretation(
     assert specification["ols_rows_excluded_missing_weather"] == 1
     assert specification["split_strategy"] == "chronological_by_service_date"
     assert (paths.tables / "holdout_coverage.csv").exists()
+    assert specification["group_mean_baseline"]["minimum_training_rows_per_group"] == 10

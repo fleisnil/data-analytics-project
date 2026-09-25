@@ -16,11 +16,39 @@ def _save(name: str) -> None:
     plt.close()
 
 
+def _daily_region_coverage(data: pd.DataFrame, regions: list[str]) -> pd.DataFrame:
+    """Include zero-observation days, not only region-days present in the data."""
+    dates = pd.to_datetime(data["service_date"], errors="coerce")
+    if dates.isna().any():
+        raise ValueError("Valid service dates are required for the region-day coverage table.")
+    all_dates = pd.date_range(dates.min(), dates.max(), freq="D").strftime("%Y-%m-%d")
+    all_regions = sorted(set(regions) | set(data["region"].dropna().astype(str)))
+    index = pd.MultiIndex.from_product(
+        [all_dates, all_regions], names=["service_date", "region"]
+    )
+    observed = data.groupby(["service_date", "region"], observed=True).agg(
+        station_calls=("observation_id", "size"),
+        stations=("station_id", "nunique"),
+        transport_modes=("transport_mode", "nunique"),
+        day_periods=("day_period", "nunique"),
+        mean_delay=("delay_minutes", "mean"),
+    )
+    result = observed.reindex(index).reset_index()
+    for column in ["station_calls", "stations", "transport_modes", "day_periods"]:
+        result[column] = result[column].fillna(0).astype(int)
+    result["has_usable_calls"] = result["station_calls"].gt(0)
+    return result
+
+
 def run_eda() -> None:
     PATHS.ensure()
     data = pd.read_csv(PATHS.processed / "model_data.csv", dtype={"station_id": "string"})
     if data.empty:
         raise ValueError("The processed dataset is empty.")
+    configured_regions = pd.read_csv(PATHS.config / "stations.csv")["region"].dropna().tolist()
+    _daily_region_coverage(data, configured_regions).to_csv(
+        PATHS.tables / "daily_region_coverage.csv", index=False
+    )
     sns.set_theme(style="whitegrid", context="notebook")
     summary = data["delay_minutes"].describe(percentiles=[0.5, 0.75, 0.9, 0.95, 0.99])
     summary.rename("value").to_csv(PATHS.tables / "delay_summary.csv")

@@ -118,7 +118,7 @@ See `docs/COLLECTION_PLAN.md` before starting the final collection.
 The pipeline produces two complementary models:
 
 1. **OLS association model** on `log1p(delay_minutes)` using complete weather cases. Station-clustered standard errors are used when possible; the model specification flags fewer than 30 clusters and other dependence that remains. Region/mode/time terms and a supported region-by-mode interaction address comparisons. `exp(coefficient)` describes a ratio of fitted geometric means of `delay + 1`, not a direct change in mean delay minutes.
-2. **Random-forest regression** predicts raw delay minutes. Train and test are split chronologically by full service date when possible; preprocessing is fitted only on training rows. Performance is compared with the *training* mean baseline using RMSE, MAE and R². Subgroup metrics cover region, mode and time period. `holdout_coverage.csv` reports categories and stations in the test period that were unseen in training; such rows need caution when interpreting performance. A one-day holdout is explicitly a development check.
+2. **Random-forest regression** predicts raw delay minutes. Train and test are split chronologically by full service date when possible; preprocessing is fitted only on training rows. Performance is compared with both the overall *training* mean and a stronger region/mode/period training-group mean (at least ten training rows per group, otherwise the overall training mean) using RMSE, MAE and R². Subgroup metrics cover region, mode and time period. `holdout_coverage.csv` reports categories and stations in the test period that were unseen in training; such rows need caution when interpreting performance. A one-day holdout is explicitly a development check.
 
 Do not interpret a statistically significant coefficient as a causal effect. Weather is reanalysis/forecast-grid data, real-time coverage is selective, and congestion, incidents and vehicle rotations can be unobserved confounders. Repeated calls share stations, journeys and days. The forest is a retrospective association benchmark using concurrent weather, not a real-time service forecast.
 
@@ -147,9 +147,9 @@ The PostgreSQL loader uses SQLAlchemy/psycopg and runs joins and aggregations fr
 | API/web collection | `collect_actuals.py`, `collect_live.py`, `collect_weather.py` |
 | Two-source integration | `prepare.py`, generated `preparation_audit.csv`, `integration_audit.csv` and unmatched-key file |
 | SQLite and SQL from Python | `database.py`, `sql/sqlite_analysis.sql` |
-| Rich EDA | `eda.py`, Notebook 03, generated figures/tables |
+| Rich EDA | `eda.py`, Notebook 03, generated figures/tables, including zero-observation region-days |
 | Regression/group comparison | `modeling.py`, Notebook 04 |
-| Model evaluation | chronological split, overall and subgroup RMSE, MAE and R² tables, training-mean baseline |
+| Model evaluation | chronological split, overall and subgroup RMSE, MAE and R² tables, overall and group-mean training baselines |
 | Interpretation | Notebook 04 and presentation discussion slides |
 | AI reflection | `docs/AI_USAGE_LOG.md` and presentation section |
 | Moodle materials | submission checklist in `docs/SUBMISSION_CHECKLIST.md` |

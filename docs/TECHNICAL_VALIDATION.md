@@ -52,3 +52,10 @@ There are two saved raw snapshot JSON files but only one entry in `collection_lo
 - The cumulative collector count starts from the legacy CSV when old log entries undercount it. A test covers this historical mismatch, and status also flags normalized snapshot files that lack log entries.
 - `holdout_coverage.csv` now lists unseen test-period categories, their affected row counts and proportions, plus unseen station IDs as a diagnostic. The current one-day development holdout has zero unseen rows in these checked fields; this does not remove its temporal-coverage limitation.
 - 44 automated tests and Ruff passed. An offline pipeline rebuild on the saved data completed with zero structural errors and the same four study-coverage warnings. No new transport or weather data were fetched, and the numbers remain development diagnostics.
+
+## Coverage and evaluation follow-up: 25 September 2026
+
+- Quality checks now distinguish 28 distinct dates from a continuous calendar window and test whether each observed region has usable rows on at least 80% of observed service dates. These are configurable project targets, not lecturer requirements. The new `daily_region_coverage.csv` includes zero-observation region-days between the first and last date.
+- A training-only region/mode/day-period mean baseline joins the existing overall training mean. Combinations with fewer than ten training rows fall back to the overall mean; the fallback count is recorded in `model_specification.json` and each affected holdout row is marked.
+- On the unchanged one-day development holdout of 53 rows, RMSE was 0.357 minutes for the forest, 0.380 for the group baseline and 0.400 for the overall mean. Two group-baseline holdout rows used the documented fallback. These values are **not final study results**.
+- The offline pipeline and all four Jupyter notebooks executed successfully with the saved inputs. The audit reported zero structural errors and the same four pre-existing study-coverage warnings. 47 automated tests and Ruff passed. No new API data were fetched.

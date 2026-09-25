@@ -64,3 +64,22 @@ def test_bad_dates_report_error_without_crashing():
     result = assess_data(frame, SETTINGS)
     assert result["status"] == "invalid"
     assert result["coverage"]["first_date"] is None
+
+
+def test_scattered_dates_and_uneven_region_days_are_not_called_complete():
+    rows = []
+    for day, region in [(1, "A"), (3, "A"), (5, "A"), (1, "B")]:
+        row = sample().iloc[0].copy()
+        row["observation_id"] = f"{region}-{day}"
+        row["region"] = region
+        row["service_date"] = f"2026-09-{day:02d}"
+        row["scheduled_time"] = f"2026-09-{day:02d}T10:10:00Z"
+        row["observation_hour"] = f"2026-09-{day:02d}T10:00:00Z"
+        rows.append(row)
+    result = assess_data(pd.DataFrame(rows), SETTINGS)
+    checks = {item["check"]: item for item in result["checks"]}
+    assert result["errors"] == 0
+    assert result["coverage"]["missing_calendar_days"] == 2
+    assert result["coverage"]["region_day_shares"]["B"] == 1 / 3
+    assert not checks["calendar_day_contiguity"]["passed"]
+    assert not checks["region_day_coverage"]["passed"]

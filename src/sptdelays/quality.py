@@ -59,11 +59,27 @@ def assess_data(frame: pd.DataFrame, settings: dict) -> dict:
         regions = sorted(frame["region"].dropna().astype(str).unique().tolist())
         modes = sorted(frame["transport_mode"].dropna().astype(str).unique().tolist())
         periods = sorted(frame["day_period"].dropna().astype(str).unique().tolist())
+        span_days = int((dates.max() - dates.min()).days + 1) if unique_dates else 0
+        missing_calendar_days = span_days - unique_dates
+        region_days = frame.assign(_service_date=dates).groupby("region", observed=True)[
+            "_service_date"
+        ].nunique().to_dict()
+        region_day_shares = {
+            str(region): count / unique_dates for region, count in region_days.items()
+        } if unique_dates else {}
+        minimum_region_share = min(region_day_shares.values(), default=0.0)
         check("study_duration", unique_dates >= target_days,
               f"{unique_dates}/{target_days} distinct service dates; a study-design target, "
               "not a lecturer-specified minimum.", "warning")
+        check("calendar_day_contiguity", missing_calendar_days == 0,
+              f"{missing_calendar_days} missing calendar date(s) within the {span_days}-day observed span. "
+              "A scattered set of dates is not a continuous collection window.", "warning")
         check("regional_coverage", len(regions) >= settings.get("study_target_regions", 7),
               f"Observed regions: {regions}", "warning")
+        region_target = settings.get("study_target_region_day_share", 0.8)
+        check("region_day_coverage", minimum_region_share >= region_target,
+              f"Lowest observed region-day share: {minimum_region_share:.1%}; "
+              f"project target: {region_target:.0%} of observed service dates.", "warning")
         check("weekday_and_weekend", dates.dt.dayofweek.lt(5).any()
               and dates.dt.dayofweek.ge(5).any(), "Include weekdays and weekends.", "warning")
         check("mode_comparison", len(modes) >= 2, f"Observed modes: {modes}", "warning")
@@ -87,6 +103,9 @@ def assess_data(frame: pd.DataFrame, settings: dict) -> dict:
               "This is value coverage, not merely a matched join key.", "warning")
         coverage.update({"stations": int(frame["station_id"].nunique()),
                          "service_dates": unique_dates,
+                         "calendar_span_days": span_days,
+                         "missing_calendar_days": missing_calendar_days,
+                         "region_day_shares": region_day_shares,
                          "first_date": str(dates.min().date()) if unique_dates else None,
                          "last_date": str(dates.max().date()) if unique_dates else None,
                          "regions": regions, "modes": modes, "day_periods": periods,

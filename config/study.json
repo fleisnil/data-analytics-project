@@ -19,6 +19,7 @@
   "random_seed": 42,
   "study_target_service_days": 28,
   "study_target_regions": 7,
+  "study_target_region_day_share": 0.8,
   "study_target_day_periods": 5,
   "weather_coverage_target": 0.95
 }

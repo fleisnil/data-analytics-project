@@ -27,6 +27,8 @@ NUMERIC_FEATURES = [
     "snowfall",
 ]
 CATEGORICAL_FEATURES = ["region", "transport_mode", "day_period", "weekday", "operator"]
+GROUP_BASELINE_COLUMNS = ["region", "transport_mode", "day_period"]
+GROUP_BASELINE_MIN_ROWS = 10
 
 
 def _metrics(y_true: pd.Series, y_pred: np.ndarray, label: str) -> dict:
@@ -105,6 +107,19 @@ def _holdout_coverage(train: pd.DataFrame, test: pd.DataFrame, columns: list[str
     return pd.DataFrame(rows)
 
 
+def _group_mean_baseline(
+    train: pd.DataFrame, test: pd.DataFrame, *, min_rows: int = GROUP_BASELINE_MIN_ROWS
+) -> tuple[np.ndarray, np.ndarray]:
+    """Use only sufficiently supported training groups; otherwise use the training mean."""
+    group_means = train.groupby(GROUP_BASELINE_COLUMNS)["delay_minutes"].agg(["mean", "size"])
+    supported = group_means.loc[group_means["size"].ge(min_rows), "mean"]
+    test_groups = pd.MultiIndex.from_frame(test[GROUP_BASELINE_COLUMNS])
+    predictions = supported.reindex(test_groups).to_numpy(dtype=float)
+    fallback = ~np.isfinite(predictions)
+    predictions[fallback] = train["delay_minutes"].mean()
+    return predictions, fallback
+
+
 def run_models() -> None:
     PATHS.ensure()
     settings = load_settings()
@@ -134,15 +149,23 @@ def run_models() -> None:
     pipeline.fit(train[feature_cols], train["delay_minutes"])
     prediction = pipeline.predict(test[feature_cols]).clip(min=0)
     baseline = np.repeat(train["delay_minutes"].mean(), len(test))
+    group_baseline, group_fallback = _group_mean_baseline(train, test)
     overall_metrics = [_metrics(test["delay_minutes"], prediction, "random_forest_overall")]
     overall_metrics.append(_metrics(test["delay_minutes"], baseline, "mean_baseline"))
-    test = test.assign(predicted_delay=prediction, baseline_delay=baseline)
+    overall_metrics.append(_metrics(test["delay_minutes"], group_baseline, "group_mean_baseline"))
+    test = test.assign(
+        predicted_delay=prediction,
+        baseline_delay=baseline,
+        group_baseline_delay=group_baseline,
+        group_baseline_fallback=group_fallback,
+    )
     subgroup_metrics: list[dict] = []
     for grouping in ["region", "transport_mode", "day_period"]:
         for name, group in test.groupby(grouping):
             for model_name, prediction_col in [
                 ("random_forest", "predicted_delay"),
                 ("mean_baseline", "baseline_delay"),
+                ("group_mean_baseline", "group_baseline_delay"),
             ]:
                 metrics = _metrics(
                     group["delay_minutes"],
@@ -184,6 +207,8 @@ def run_models() -> None:
             "delay_minutes",
             "predicted_delay",
             "baseline_delay",
+            "group_baseline_delay",
+            "group_baseline_fallback",
         ]
     ].to_csv(PATHS.tables / "holdout_predictions.csv", index=False)
     joblib.dump(pipeline, PATHS.root / "reports" / "delay_random_forest.joblib")
@@ -275,6 +300,12 @@ def run_models() -> None:
                     for row in holdout_coverage.itertuples(index=False)
                 },
                 "holdout_coverage_note": "See holdout_coverage.csv. Unseen one-hot categories are ignored by the fitted encoder; station_id is diagnostic only, not a model feature.",
+                "group_mean_baseline": {
+                    "training_only_fields": GROUP_BASELINE_COLUMNS,
+                    "minimum_training_rows_per_group": GROUP_BASELINE_MIN_ROWS,
+                    "fallback": "overall training mean",
+                    "fallback_test_rows": int(group_fallback.sum()),
+                },
                 "evaluation_caveat": "One-day results are development only. Weather is concurrent/reanalysed, not a deployable forecast. Shared journeys and stations can remain dependent.",
                 "ols_rows": len(ols_data),
                 "ols_rows_excluded_missing_weather": len(data) - len(ols_data),

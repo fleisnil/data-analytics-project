@@ -19,7 +19,7 @@
 - [ ] Confirm weather units, archive-versus-forecast mix, join rate and complete-value rate.
 - [ ] Run `sptdelays status`; resolve unlogged raw snapshots and collection gaps.
 - [ ] Run `sptdelays validate`; review every error and coverage warning.
-- [ ] Use a chronological holdout and compare with the baseline.
+- [ ] Use a chronological holdout and compare with both overall and group-mean training baselines; report sparse/unseen group fallbacks.
 - [ ] Report exact metrics and p-values with effect sizes.
 - [ ] Re-run tests from a clean environment.
 - [ ] Execute all four notebooks using `python scripts/check_notebooks.py --execute`.

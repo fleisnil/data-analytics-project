@@ -68,7 +68,7 @@ The generated audit tables record every row count and the weather match rate.
 
 ## EDA and statistical testing
 
-EDA includes distribution summaries, missingness, delay by mode/region/time, a mode-by-period heatmap, daily coverage and the weather relationship. Regional results report both call-weighted and equal-station-weight means, because station sampling can distort a regional comparison. Extreme values are clipped only for plot readability, not silently deleted from the source.
+EDA includes distribution summaries, missingness, delay by mode/region/time, a mode-by-period heatmap, daily coverage and the weather relationship. `daily_region_coverage.csv` includes every calendar date from the first to last observed service date and every configured region, including cells with zero usable calls. This table measures usable analytical rows, not every attempted API request. Regional results report both call-weighted and equal-station-weight means, because station sampling can distort a regional comparison. Extreme values are clipped only for plot readability, not silently deleted from the source.
 
 Tests include:
 
@@ -82,14 +82,14 @@ When computable, results include raw and Holm-adjusted p-values, sample size, ef
 
 The explanatory model uses OLS on `log1p(delay_minutes)` using complete weather cases. It contains weather, weekend, region, mode and day-period terms where the design is identifiable. A region-by-mode interaction is included only when observed cells provide full rank and residual degrees of freedom. Standard errors cluster by station when possible; with fewer than 30 stations and one service day, inference remains especially fragile. On this log1p outcome, `exp(beta)` is a ratio for fitted geometric means of delay plus one, rather than a percentage difference in arithmetic mean delay.
 
-The predictive model is a random-forest regressor for raw delay minutes with one-hot encoded categories and train-fitted median imputation. Whole service dates are held out chronologically when at least two exist; a one-day development run holds out later whole scheduled timestamps and must not be presented as final performance. The model uses concurrent weather, so its evaluation describes retrospective association rather than an operational real-time forecast. The same training-mean baseline is evaluated on each group.
+The predictive model is a random-forest regressor for raw delay minutes with one-hot encoded categories and train-fitted median imputation. Whole service dates are held out chronologically when at least two exist; a one-day development run holds out later whole scheduled timestamps and must not be presented as final performance. The model uses concurrent weather, so its evaluation describes retrospective association rather than an operational real-time forecast. Two baselines are evaluated on the same holdout and subgroups: the overall training mean and the training mean for each region/mode/day-period combination. A group mean is used only with at least ten training rows; sparse or unseen combinations fall back to the overall training mean. Neither baseline uses test targets.
 
 Metrics:
 
 - RMSE in minutes;
 - MAE in minutes;
 - R²;
-- comparison with a mean-delay baseline;
+- comparison with overall and supported-group training-mean baselines;
 - subgroup metrics by region, mode and day period with sample sizes.
 
 Permutation importance supports interpretation but is not a causal effect measure.
@@ -108,3 +108,4 @@ Stations are aggregated to profile-level measures: mean, median and 90th-percent
 - SQL queries are stored as standalone files and executed from Python.
 - `sptdelays pipeline` rebuilds analysis from saved inputs with stage statuses, versions and SHA-256 hashes in `run_manifest.json`; it performs no API collection.
 - `sptdelays validate` distinguishes structural data errors from configurable project coverage targets and manual submission requirements.
+- The quality audit checks missing dates within the observed span and how consistently each region appears across observed service dates. The 80% region-day threshold is a project design target, not a lecturer rule.

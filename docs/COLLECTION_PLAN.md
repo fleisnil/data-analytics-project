@@ -31,7 +31,7 @@ For unattended collection, configure Windows Task Scheduler to run `.venv\Script
 
 ## Monitoring
 
-Check `uv run sptdelays status` daily. Investigate station failures, gaps longer than one hour, unlogged raw or normalized snapshot files and unexpected row-count changes. The files below form the collection evidence:
+Check `uv run sptdelays status` daily. Investigate station failures, gaps longer than one hour, unlogged raw or normalized snapshot files and unexpected row-count changes. After preparation, inspect `reports/tables/daily_region_coverage.csv`: it shows every region on every calendar date, including zero usable-call cells. The files below form the collection evidence:
 
 - `data/raw/transport_live/stationboards_*.json`
 - `data/interim/collection_log.csv`
@@ -58,4 +58,4 @@ uv run sptdelays pipeline --source live
 uv run pytest -p no:cacheprovider
 ```
 
-The offline pipeline checks data, joins, databases, EDA, model and map from saved inputs and writes `run_manifest.json`. Review `quality_checks.csv` and the source mix in the weather log. Do not reuse the one-day development results as final evidence.
+The offline pipeline checks data, joins, databases, EDA, model and map from saved inputs and writes `run_manifest.json`. Review `quality_checks.csv`, especially calendar-date gaps and region-day coverage, plus the source mix in the weather log. Do not reuse the one-day development results as final evidence.
