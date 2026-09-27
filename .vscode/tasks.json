@@ -1,0 +1,55 @@
+{
+  "version": "2.0.0",
+  "options": { "cwd": "${workspaceFolder}" },
+  "presentation": { "reveal": "always", "panel": "shared", "focus": false },
+  "tasks": [
+    {
+      "label": "Projekt einrichten",
+      "detail": "Installiert die Python-Umgebung aus uv.lock. Benötigt uv und ggf. Internet; sammelt keine Daten.",
+      "type": "process",
+      "command": "uv",
+      "args": ["sync", "--frozen", "--extra", "dev"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Projekt testen",
+      "detail": "Führt zuerst die automatischen Tests, danach die Codeprüfung aus. Keine Datensammlung.",
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--frozen", "--extra", "dev", "python", "scripts/run_project_checks.py"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Analyse starten",
+      "detail": "Analysiert gespeicherte Live- und Wetterdaten; aktualisiert Berichte und Datenbanken. Keine API-Sammlung.",
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--frozen", "--extra", "dev", "sptdelays", "pipeline", "--source", "live"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Ergebnisse prüfen",
+      "detail": "Zeigt den Datenstatus und prüft vorhandene integrierte Ergebnisse. Warnungen zur Studienabdeckung beachten.",
+      "dependsOn": ["Ergebnisse: Status", "Ergebnisse: Validierung"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Ergebnisse: Status",
+      "hide": true,
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--frozen", "--extra", "dev", "sptdelays", "status"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Ergebnisse: Validierung",
+      "hide": true,
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--frozen", "--extra", "dev", "sptdelays", "validate"],
+      "problemMatcher": []
+    }
+  ]
+}

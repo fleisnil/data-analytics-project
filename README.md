@@ -47,6 +47,44 @@ artifacts/          Final Moodle ZIP/PDF/video files (ignored by Git)
 
 Install [uv](https://docs.astral.sh/uv/) or use a normal Python virtual environment.
 
+### Start without typing terminal commands
+
+Open the **repository folder itself** in VS Code (the folder containing this
+README and `pyproject.toml`). Install the recommended Python/Jupyter extensions
+if prompted. With `uv` installed and available on PATH, select
+**Terminal > Run Task...** (German UI: **Terminal > Aufgabe ausführen...**):
+
+| Action | What it does |
+|---|---|
+| **Projekt einrichten** | Creates/synchronizes `.venv` using the exact versions in `uv.lock`, including test tools. Run this first. |
+| **Projekt testen** | Runs pytest, then Ruff. It does not require study data. Also available with **Ctrl+Shift+B**. |
+| **Analyse starten** | Rebuilds the full analysis from saved live transport and weather inputs. **Updates generated reports and databases**; no API collection is started. |
+| **Ergebnisse prüfen** | Shows collection status, then validates the existing integrated dataset and updates its quality reports. |
+
+The task output appears automatically in the integrated terminal; you do not
+need to type commands there. Tasks run only when selected, never automatically
+when the folder opens. `uv` may download dependencies when setting up or
+synchronizing the environment, but the analysis actions do not collect API data.
+If VS Code cannot find `uv`, install it and restart VS Code.
+The check action uses a fresh private temporary directory for pytest, avoiding
+permission conflicts with old user-wide pytest folders. It stops on the first
+failed check and preserves its exit code.
+
+**Fresh GitHub checkout:** data is intentionally not included in Git. Setup and
+code tests can run without it, but analysis needs saved transport inputs and
+`data/interim/weather_hourly.csv`; result validation needs
+`data/processed/model_data.csv`. Transfer your group-collected data into the
+same relative folders or follow the collection plan first. A missing-data error
+is not an instruction to invent or automatically download a replacement dataset.
+Coverage warnings mean the study is still a development run, even if code tests
+pass. Archive an earlier analysis if you need to retain it before rebuilding.
+
+For notebooks, open a file in `notebooks/`, select the `.venv` Python kernel,
+and click **Run All**. Individual code tests are also available in VS Code's
+**Testing** sidebar (the flask icon).
+
+### Equivalent terminal commands
+
 ```powershell
 uv venv
 uv sync --extra dev
