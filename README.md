@@ -145,6 +145,14 @@ Build and validate the SQLite database:
 python src/database.py
 ```
 
+Generate the reproducible EDA tables and visualisations:
+
+```bash
+python src/eda.py
+```
+
+The EDA script creates descriptive CSV tables in `results/tables/` and PNG figures in `results/figures/`. These outputs are regenerated from the current analysis dataset and remain ignored by Git.
+
 This creates `data/database/transport_weather.sqlite` locally and executes the documented SQL queries from `sql/analysis_queries.sql`. The SQLite file and generated result CSVs are reproducible outputs and are not committed to Git.
 
 Run the SQLite unit test:
@@ -174,6 +182,7 @@ For analysis on `main`, use:
 python src/sync_collection_data.py
 python src/build_dataset.py
 python src/database.py
+python src/eda.py
 ```
 
 The sync script does not switch branches and does not commit data to `main`.
@@ -190,6 +199,29 @@ The sync script does not switch branches and does not commit data to `main`.
 8. Run statistical tests where appropriate.
 9. Build and evaluate a classification model for a documented delay threshold.
 10. Interpret model results in relation to the research question.
+
+### Current EDA outputs
+
+The EDA code currently generates:
+
+- overall row/date/mode/delay summary
+- missing-value table
+- city × transport-mode summary
+- hourly summary
+- weather-variable summary
+- predicted-delay histogram
+- delay rate by transport mode
+- average delay by city/region
+- boxplots by transport mode
+- weekday × region heatmap
+- hourly delay pattern
+- temperature vs delay
+- precipitation vs delay
+- collection coverage over time
+- daily average delay
+- sample-balance plot by city and mode
+
+All current EDA results are descriptive and provisional while automated collection is still running.
 
 ## Planned visualisations
 

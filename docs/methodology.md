@@ -147,3 +147,16 @@ GitHub Actions stores compact OJP and MeteoSwiss CSV snapshots on the separate `
 `src/sync_collection_data.py` fetches `origin/data-collection` and copies the archived snapshots into the ignored local `data/interim/` directories without checking out the data branch.
 
 After synchronization, `src/build_dataset.py` can use both local MeteoSwiss raw files and the compact archived weather snapshots. This keeps the automated archive small while allowing the final multi-week analysis to use all collected runs.
+
+
+## 11. Exploratory data analysis
+
+Exploratory analysis is implemented in `src/eda.py`.
+
+The EDA always starts from the integrated analysis dataset after the one-observation-per-journey/stop selection. This avoids allowing frequently repeated snapshots of the same journey to dominate descriptive results.
+
+The script produces both non-graphical and graphical EDA. Non-graphical outputs include missingness, delay summaries, city/mode summaries, hourly summaries and weather summaries. Graphical outputs cover distributions, regional and modal comparisons, weekday/hour patterns, weather relationships, temporal coverage and sample balance.
+
+Delay rates are shown as percentages within groups rather than raw delayed counts wherever possible. This is important because the number of selected observations can differ across regions and transport modes.
+
+The collection is still growing. Current EDA output must therefore be described as provisional and descriptive rather than as evidence of stable differences or causal weather effects.

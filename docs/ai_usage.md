@@ -67,3 +67,16 @@ This document records meaningful AI assistance, including failures and correctio
 **Validation approach:** The code is designed from the official MeteoSwiss Open Data file structure and parameter documentation. A synthetic CSV parser test was performed before committing. A live repository-side test is still required after pulling the commit.
 
 **Lesson:** Source documentation should determine timestamp timezone, units and field semantics rather than assumptions.
+
+
+## 2026-09-30 — Exploratory data analysis code
+
+**Task:** Prepare the reusable EDA structure while automated data collection continues.
+
+**AI contribution:** A reproducible `src/eda.py` script was drafted to generate non-graphical summary tables and graphical comparisons for delay distributions, regions, transport modes, time patterns, weather variables and sample balance.
+
+**Validation:** The EDA code and its unit test were executed on a synthetic integrated dataset. The test successfully created the summary CSV files and all expected figures without requiring the final multi-week dataset.
+
+**Limitation:** The current live dataset is still small and temporally incomplete, so the code explicitly treats current visual patterns as descriptive and provisional.
+
+**Lesson:** Building reusable analysis code early is useful, but substantive interpretation should wait until the sampling period contains enough days, time periods and weather variation.
