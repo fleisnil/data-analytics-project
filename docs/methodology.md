@@ -138,3 +138,12 @@ The SQL view `transport_weather_joined` performs a real SQL join between the two
 SQL statements are stored in `sql/schema.sql` and `sql/analysis_queries.sql` and are executed from Python. The analysis queries include aggregations with `GROUP BY` as well as the cross-source SQL join.
 
 The SQLite database is reproducible and therefore ignored by Git. PostgreSQL may be added later as a bonus extension.
+
+
+## 10. Automated collection and analysis sync
+
+GitHub Actions stores compact OJP and MeteoSwiss CSV snapshots on the separate `data-collection` branch. The development and analysis code remains on `main`.
+
+`src/sync_collection_data.py` fetches `origin/data-collection` and copies the archived snapshots into the ignored local `data/interim/` directories without checking out the data branch.
+
+After synchronization, `src/build_dataset.py` can use both local MeteoSwiss raw files and the compact archived weather snapshots. This keeps the automated archive small while allowing the final multi-week analysis to use all collected runs.

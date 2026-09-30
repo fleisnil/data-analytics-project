@@ -29,6 +29,7 @@ import pandas as pd
 
 OJP_SNAPSHOT_DIR = Path("data/interim/ojp_snapshots")
 WEATHER_RAW_DIR = Path("data/raw/weather")
+WEATHER_SNAPSHOT_DIR = Path("data/interim/weather_snapshots")
 PROCESSED_DIR = Path("data/processed")
 RESULTS_TABLE_DIR = Path("results/tables")
 
@@ -214,24 +215,11 @@ def infer_weather_station(path: Path) -> tuple[str, dict]:
     return station_abbr, WEATHER_STATIONS[station_abbr]
 
 
-def load_weather_measurements() -> pd.DataFrame:
-    """
-    Load complete 10-minute weather series from all saved raw MeteoSwiss files.
-
-    Repeated collector runs download overlapping measurements. For each
-    city/station/timestamp, the row with the greatest number of available
-    project weather parameters is retained; newer raw batches break ties.
-    """
-    files = sorted(WEATHER_RAW_DIR.glob("*/*.csv"))
-
-    if not files:
-        raise FileNotFoundError(
-            f"No raw MeteoSwiss files found in {WEATHER_RAW_DIR.resolve()}"
-        )
-
+def _load_raw_weather_measurements() -> list[pd.DataFrame]:
+    """Load full 10-minute MeteoSwiss series from local raw downloads."""
     frames = []
 
-    for path in files:
+    for path in sorted(WEATHER_RAW_DIR.glob("*/*.csv")):
         station_abbr, metadata = infer_weather_station(path)
         df = read_semicolon_csv(path)
 
@@ -251,22 +239,26 @@ def load_weather_measurements() -> pd.DataFrame:
             utc=True,
             errors="coerce",
         )
+        df = df.dropna(
+            subset=["reference_timestamp"]
+        ).copy()
 
-        df = df.dropna(subset=["reference_timestamp"]).copy()
-
-        for source_column in WEATHER_PARAMETER_MAP:
+        for source_column, output_column in (
+            WEATHER_PARAMETER_MAP.items()
+        ):
             if source_column in df.columns:
-                df[source_column] = pd.to_numeric(
+                df[output_column] = pd.to_numeric(
                     df[source_column],
                     errors="coerce",
                 )
             else:
-                df[source_column] = pd.NA
+                df[output_column] = pd.NA
 
         df["city"] = metadata["city"]
         df["weather_station_abbr"] = station_abbr
         df["weather_station_name"] = metadata["station_name"]
-        df["weather_raw_batch"] = path.parent.name
+        df["weather_source_type"] = "raw"
+        df["weather_source_batch"] = path.parent.name
         df["weather_source_file"] = str(path)
 
         keep_columns = [
@@ -274,17 +266,115 @@ def load_weather_measurements() -> pd.DataFrame:
             "weather_station_abbr",
             "weather_station_name",
             "reference_timestamp",
-            "weather_raw_batch",
+            "weather_source_type",
+            "weather_source_batch",
             "weather_source_file",
-        ] + list(WEATHER_PARAMETER_MAP.keys())
+        ] + list(WEATHER_PARAMETER_MAP.values())
 
         frames.append(df[keep_columns])
 
+    return frames
+
+
+def _load_weather_snapshot_measurements() -> list[pd.DataFrame]:
+    """Load compact weather snapshots synced from data-collection."""
+    frames = []
+
+    for path in sorted(
+        WEATHER_SNAPSHOT_DIR.glob(
+            "weather_snapshot_*.csv"
+        )
+    ):
+        df = pd.read_csv(path)
+
+        required = [
+            "city",
+            "weather_station_abbr",
+            "weather_station_name",
+            "reference_timestamp",
+        ]
+        missing = [
+            column
+            for column in required
+            if column not in df.columns
+        ]
+        if missing:
+            raise ValueError(
+                f"Weather snapshot {path} missing columns: "
+                f"{missing}"
+            )
+
+        df["reference_timestamp"] = pd.to_datetime(
+            df["reference_timestamp"],
+            utc=True,
+            errors="coerce",
+        )
+        df = df.dropna(
+            subset=["reference_timestamp"]
+        ).copy()
+
+        for output_column in WEATHER_PARAMETER_MAP.values():
+            if output_column in df.columns:
+                df[output_column] = pd.to_numeric(
+                    df[output_column],
+                    errors="coerce",
+                )
+            else:
+                df[output_column] = pd.NA
+
+        df["weather_source_type"] = "snapshot"
+        df["weather_source_batch"] = (
+            path.stem.replace("weather_snapshot_", "")
+        )
+        df["weather_source_file"] = str(path)
+
+        keep_columns = [
+            "city",
+            "weather_station_abbr",
+            "weather_station_name",
+            "reference_timestamp",
+            "weather_source_type",
+            "weather_source_batch",
+            "weather_source_file",
+        ] + list(WEATHER_PARAMETER_MAP.values())
+
+        frames.append(df[keep_columns])
+
+    return frames
+
+
+def load_weather_measurements() -> pd.DataFrame:
+    """
+    Load all locally available MeteoSwiss measurements.
+
+    Manual/pilot runs can provide full raw 10-minute files. Automated runs
+    persist compact weather snapshots on data-collection. Both inputs are
+    supported and deduplicated by city, station and reference timestamp.
+    """
+    frames = (
+        _load_raw_weather_measurements()
+        + _load_weather_snapshot_measurements()
+    )
+
+    if not frames:
+        raise FileNotFoundError(
+            "No MeteoSwiss raw files or weather snapshots found."
+        )
+
     weather = pd.concat(frames, ignore_index=True)
 
-    parameter_columns = list(WEATHER_PARAMETER_MAP.keys())
+    parameter_columns = list(
+        WEATHER_PARAMETER_MAP.values()
+    )
     weather["_weather_parameter_count"] = (
-        weather[parameter_columns].notna().sum(axis=1)
+        weather[parameter_columns]
+        .notna()
+        .sum(axis=1)
+    )
+    weather["_source_priority"] = (
+        weather["weather_source_type"]
+        .map({"raw": 1, "snapshot": 2})
+        .fillna(0)
     )
 
     weather = weather.sort_values(
@@ -293,9 +383,17 @@ def load_weather_measurements() -> pd.DataFrame:
             "weather_station_abbr",
             "reference_timestamp",
             "_weather_parameter_count",
-            "weather_raw_batch",
+            "_source_priority",
+            "weather_source_batch",
         ],
-        ascending=[True, True, True, False, False],
+        ascending=[
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+        ],
     )
 
     weather = weather.drop_duplicates(
@@ -307,11 +405,14 @@ def load_weather_measurements() -> pd.DataFrame:
         keep="first",
     ).copy()
 
-    weather = weather.rename(columns=WEATHER_PARAMETER_MAP)
-    weather = weather.drop(columns=["_weather_parameter_count"])
+    weather = weather.drop(
+        columns=[
+            "_weather_parameter_count",
+            "_source_priority",
+        ]
+    )
 
     return weather
-
 
 def join_transport_weather(
     transport: pd.DataFrame,
@@ -404,6 +505,16 @@ def build_integration_report(
         (
             "weather_raw_files",
             len(list(WEATHER_RAW_DIR.glob("*/*.csv"))),
+        ),
+        (
+            "weather_snapshot_files",
+            len(
+                list(
+                    WEATHER_SNAPSHOT_DIR.glob(
+                        "weather_snapshot_*.csv"
+                    )
+                )
+            ),
         ),
         ("weather_unique_10min_measurements", len(weather)),
         ("joined_rows_total", len(joined)),

@@ -125,7 +125,15 @@ python src/collect_weather.py
 
 MeteoSwiss Open Data does not require the OJP token.
 
-Build the integrated OJP + weather dataset:
+Sync the persisted collection data from the `data-collection` branch:
+
+```bash
+python src/sync_collection_data.py
+```
+
+This fetches the latest `data-collection` branch and copies all archived OJP/weather snapshots into the ignored local `data/interim/` folders without switching away from `main`.
+
+Then build the integrated OJP + weather dataset:
 
 ```bash
 python src/build_dataset.py
@@ -155,6 +163,20 @@ The database contains:
 - `transport_weather_joined` — SQL view joining OJP and MeteoSwiss by city and the latest non-future weather timestamp within 30 minutes
 
 The SQL queries include row counts, city/mode delay summaries, weather-join quality, delay summaries with weather, and hourly delay summaries.
+
+## Automated collection
+
+GitHub Actions runs `.github/workflows/collect_data.yml` every 30 minutes at minute 7 and 37. It collects OJP and MeteoSwiss data and commits only the compact CSV snapshots to the separate `data-collection` branch.
+
+For analysis on `main`, use:
+
+```bash
+python src/sync_collection_data.py
+python src/build_dataset.py
+python src/database.py
+```
+
+The sync script does not switch branches and does not commit data to `main`.
 
 ## Planned analytics pipeline
 

@@ -15,6 +15,7 @@ data/raw/ojp/
 data/raw/weather/
 data/interim/ojp_snapshots/
 data/interim/weather_snapshots/
+data/collection_manifest.csv
 
 # Processed datasets and local databases are reproducible outputs
 data/processed/*.csv
