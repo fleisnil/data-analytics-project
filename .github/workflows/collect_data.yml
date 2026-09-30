@@ -1,0 +1,77 @@
+name: Collect OJP and MeteoSwiss data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7,37 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scheduled-data-collection
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out main code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: project
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: project/requirements.txt
+
+      - name: Install dependencies
+        working-directory: project
+        run: pip install -r requirements.txt
+
+      - name: Collect OJP
+        working-directory: project
+        env:
+          OJP_API_TOKEN: ${{ secrets.OJP_API_TOKEN }}
+        run: |
+          test -n "$OJP_API_TOKEN"
+          python src/collect_all_stations.py
+
+      - name: Collect MeteoSwiss
+        working-directory: project
+        run: python src/collect_weather.py
+
+      - name: Check out data branch
+        uses: actions/checkout@v4
+        with:
+          ref: data-collection
+          path: archive
+          fetch-depth: 0
+
+      - name: Archive compact snapshots
+        run: |
+          python project/src/archive_collection.py \
+            --source-root project \
+            --archive-root archive
+
+      - name: Commit data
+        working-directory: archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/interim/ojp_snapshots/*.csv
+          git add -f data/interim/weather_snapshots/*.csv
+          git add data/collection_manifest.csv
+          if git diff --cached --quiet; then
+            echo "No new data."
+            exit 0
+          fi
+          git commit -m "Collect transit and weather data"
+          git pull --rebase origin data-collection
+          git push origin HEAD:data-collection
