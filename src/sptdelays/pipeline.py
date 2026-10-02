@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 
+from .readiness import require_pipeline_inputs
 from .settings import PATHS, load_settings
 
 
@@ -23,27 +24,10 @@ def fingerprint(path: Path) -> dict:
 
 
 def run_pipeline(source: str = "live") -> dict:
+    transport_inputs = require_pipeline_inputs(PATHS, source)
     PATHS.ensure()
     settings = load_settings()
-    inputs = [PATHS.interim / "weather_hourly.csv"]
-    if source == "live":
-        legacy = PATHS.interim / "live_observations.csv"
-        live_inputs = ([legacy] if legacy.exists() else []) + sorted(
-            (PATHS.interim / "live_snapshots").glob("stationboards_*.csv")
-        )
-        if not live_inputs:
-            raise FileNotFoundError("No saved live observations exist. Run collect-live first.")
-        inputs.extend(live_inputs)
-    elif source == "actuals":
-        actuals = sorted((PATHS.raw / "actuals_v2").glob("*_selected_stations.csv"))
-        if not actuals:
-            raise FileNotFoundError("No selected Actual data v2 files exist.")
-        inputs.extend(actuals)
-    else:
-        raise ValueError("source must be live or actuals")
-    for path in inputs:
-        if not path.exists():
-            raise FileNotFoundError(f"Missing input: {path}. Collect data before running pipeline.")
+    inputs = [PATHS.interim / "weather_hourly.csv", *transport_inputs]
     inputs.extend(PATHS.config.glob("*.json"))
     inputs.extend(PATHS.config.glob("*.csv"))
     inputs.extend(PATHS.interim.glob("stations_resolved.csv"))

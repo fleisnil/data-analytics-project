@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import sys
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -9,6 +10,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("collect-live", help="Collect a timestamped stationboard snapshot")
     subparsers.add_parser("status", help="Show progress and failures in the live collection")
+    doctor = subparsers.add_parser("doctor", help="Check input readiness without changing data")
+    doctor.add_argument("--source", choices=["live", "actuals"], default="live")
     subparsers.add_parser("resolve-stations", help="Resolve station IDs and coordinates from the locations API")
     subparsers.add_parser("list-actuals", help="List official Actual data v2 dates")
     actuals = subparsers.add_parser("collect-actuals", help="Stream selected official daily Actual data files")
@@ -35,6 +38,7 @@ def main() -> None:
     commands = {
         "collect-live": ("collect_live", "collect_live"),
         "status": ("status", "print_collection_status"),
+        "doctor": ("readiness", "print_readiness"),
         "resolve-stations": ("collect_stations", "resolve_stations"),
         "list-actuals": ("collect_actuals", "list_resources"),
         "collect-actuals": ("collect_actuals", "collect_actuals"),
@@ -54,8 +58,14 @@ def main() -> None:
     module, function_name = commands[args.command]
     function = getattr(importlib.import_module(f"sptdelays.{module}"), function_name)
     arguments = ([args.dates] if args.command == "collect-actuals" else
-                 [args.source] if args.command in {"prepare", "pipeline"} else [])
-    result = function(*arguments)
+                 [args.source] if args.command in {"prepare", "pipeline", "doctor"} else [])
+    try:
+        result = function(*arguments)
+    except FileNotFoundError as exc:
+        print(f"{exc}\nCheck setup and saved inputs with sptdelays doctor.", file=sys.stderr)
+        raise SystemExit(1) from None
+    if args.command == "doctor" and not result["ready"]:
+        raise SystemExit(1)
     if args.command == "validate" and result["errors"]:
         raise SystemExit(1)
 

@@ -21,6 +21,14 @@
       "problemMatcher": []
     },
     {
+      "label": "Startbereitschaft prüfen",
+      "detail": "Prüft gespeicherte Eingabedateien und zeigt nächste Schritte. Verändert und sammelt keine Daten.",
+      "type": "process",
+      "command": "uv",
+      "args": ["run", "--frozen", "--extra", "dev", "sptdelays", "doctor"],
+      "problemMatcher": []
+    },
+    {
       "label": "Analyse starten",
       "detail": "Analysiert gespeicherte Live- und Wetterdaten; aktualisiert Berichte und Datenbanken. Keine API-Sammlung.",
       "type": "process",

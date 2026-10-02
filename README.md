@@ -58,6 +58,7 @@ if prompted. With `uv` installed and available on PATH, select
 |---|---|
 | **Projekt einrichten** | Creates/synchronizes `.venv` using the exact versions in `uv.lock`, including test tools. Run this first. |
 | **Projekt testen** | Runs pytest, then Ruff. It does not require study data. Also available with **Ctrl+Shift+B**. |
+| **Startbereitschaft prüfen** | Checks that the required saved inputs exist, are nonempty and readable; lists missing inputs and next steps. No data is changed or collected. |
 | **Analyse starten** | Rebuilds the full analysis from saved live transport and weather inputs. **Updates generated reports and databases**; no API collection is started. |
 | **Ergebnisse prüfen** | Shows collection status, then validates the existing integrated dataset and updates its quality reports. |
 
@@ -78,6 +79,22 @@ same relative folders or follow the collection plan first. A missing-data error
 is not an instruction to invent or automatically download a replacement dataset.
 Coverage warnings mean the study is still a development run, even if code tests
 pass. Archive an earlier analysis if you need to retain it before rebuilding.
+
+Select **Startbereitschaft prüfen** before your first analysis. The equivalent
+command is `uv run sptdelays doctor` (or `doctor --source actuals` for that source).
+Missing inputs produce a nonzero exit code and concrete next steps. This is a
+lightweight file check, not a content/schema or study-quality validation.
+**Analyse starten** performs this preflight automatically before changing any
+previous run manifest. Offline preparation uses saved station resolutions or the
+configured panel; only explicit collection/resolution commands access the APIs.
+
+Weather refreshes now preserve a more complete previous station-hour row if a
+new response contains fewer usable weather values. The entire row and its
+provenance are kept together, never mixed across products. Equal completeness
+uses the new fetch; this is a missingness policy, not proof of higher accuracy.
+`reports/tables/weather_update_audit.csv` explains the most recent successful
+refresh. Invalid responses are logged and do not replace stored weather;
+CSV replacement is atomic to protect an existing file from partial writes.
 
 For notebooks, open a file in `notebooks/`, select the `.venv` Python kernel,
 and click **Run All**. Individual code tests are also available in VS Code's

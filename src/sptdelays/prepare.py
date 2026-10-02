@@ -78,7 +78,8 @@ def _prepare_live(files: list[Path]) -> pd.DataFrame:
 def prepare_transport(source: str = "live") -> pd.DataFrame:
     settings = load_settings()
     PATHS.ensure()
-    stations = load_station_panel()
+    # Preparation and the saved-data pipeline must never trigger API collection.
+    stations = load_station_panel(resolve_if_missing=False)
     stations["station_id"] = stations["station_id"].map(normalize_station_id)
     if source == "actuals":
         files = sorted((PATHS.raw / "actuals_v2").glob("*_selected_stations.csv"))

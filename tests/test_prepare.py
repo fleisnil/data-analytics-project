@@ -27,12 +27,29 @@ def isolated_data(tmp_path, monkeypatch):
     station = pd.DataFrame([{"station_id": "8503000", "station_name": "Zürich HB", "region": "Zürich", "canton": "ZH", "station_type": "rail_hub", "latitude": 47.38, "longitude": 8.54}])
     monkeypatch.setattr(prepare, "PATHS", paths)
     monkeypatch.setattr(prepare, "load_settings", lambda: settings)
-    monkeypatch.setattr(prepare, "load_station_panel", lambda: station.copy())
+    monkeypatch.setattr(prepare, "load_station_panel", lambda **kwargs: station.copy())
     return paths
 
 
 def _live_row(**changes):
     return {"data_source": "transport_opendata_live", "station_id": "8503000", "station_name": "Zürich HB", "journey_id": "001", "operator": "SBB", "category_raw": "S9", "line": "9", "destination": "Uster", "scheduled_time": "2026-09-17T14:00:00+0200", "reported_time": "2026-09-17T14:05:00+0200", "observed_at": "2026-09-17T11:59:00Z", "delay_minutes_signed": 5, **changes}
+
+
+def test_preparation_never_resolves_stations_over_network(isolated_data, monkeypatch):
+    from sptdelays import collect_stations
+
+    station = prepare.load_station_panel()
+    isolated_data.config.mkdir()
+    station.to_csv(isolated_data.config / "stations.csv", index=False)
+    monkeypatch.setattr(collect_stations, "PATHS", isolated_data)
+    monkeypatch.setattr(prepare, "load_station_panel", collect_stations.load_station_panel)
+
+    def network_not_allowed():
+        raise AssertionError("Offline preparation must not resolve stations via API")
+
+    monkeypatch.setattr(collect_stations, "resolve_stations", network_not_allowed)
+    pd.DataFrame([_live_row()]).to_csv(isolated_data.interim / "live_observations.csv", index=False)
+    assert len(prepare.prepare_transport()) == 1
 
 
 def test_latest_snapshot_not_file_order_and_direction_part_of_key(isolated_data):
