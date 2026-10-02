@@ -115,7 +115,7 @@ def test_model_run_exports_auditable_baselines_and_correct_log_interpretation(
     medians = fitted.named_steps["features"].named_transformers_["numeric"].statistics_
     assert medians[1] == 30.0  # median of training precipitation 1..59, not holdout 1000s
     subgroups = pd.read_csv(paths.tables / "subgroup_metrics.csv")
-    assert set(subgroups.model) == {"random_forest", "mean_baseline", "group_mean_baseline"}
+    assert set(subgroups.model) == {"random_forest", "forest_without_weather", "mean_baseline", "group_mean_baseline"}
     assert subgroups.group.str.startswith("day_period:").any()
     coefficients = pd.read_csv(paths.tables / "ols_associations.csv")
     assert "approx_percent_change" not in coefficients
@@ -127,3 +127,78 @@ def test_model_run_exports_auditable_baselines_and_correct_log_interpretation(
     assert specification["split_strategy"] == "chronological_by_service_date"
     assert (paths.tables / "holdout_coverage.csv").exists()
     assert specification["group_mean_baseline"]["minimum_training_rows_per_group"] == 10
+    assert specification["weather_ablation_status"] == "evaluated"
+    assert specification["ols_reference_categories"]["C(region)"] == "A"
+    assert specification["ols_reference_categories"]["C(transport_mode)"] == "bus"
+    assert specification["temporal_validation_status"] == "insufficient_development_data"
+    intervals = pd.read_csv(paths.tables / "paired_model_comparisons.csv")
+    assert intervals.ci_low.isna().all()
+    assert intervals.status.eq("insufficient_test_dates").all()
+    assert pd.read_csv(paths.tables / "temporal_validation.csv").empty
+
+    from sptdelays import reporting
+
+    monkeypatch.setattr(reporting, "PATHS", paths)
+    (paths.tables / "quality_audit.json").write_text(json.dumps({
+        "status": "development", "errors": 0, "warnings": 1,
+        "coverage": {"rows": 80, "service_dates": 2, "regions": ["A", "B"], "stations": 8},
+        "checks": [{"passed": False, "check": "study_duration", "detail": "Need more dates"}],
+    }))
+    reporting.write_analysis_summary()
+    summary = (paths.root / "reports/analysis_summary.md").read_text(encoding="utf-8")
+    assert "No temporal stability claim" in summary
+    assert "Need more dates" in summary
+    assert "not a percent change in arithmetic mean delay" in summary
+    assert "forest_without_weather" in summary
+    assert (paths.figures / "08_model_comparison.png").stat().st_size > 1000
+
+
+def test_multiday_end_to_end_evaluation_keeps_holdout_separate(tmp_path, monkeypatch):
+    """Synthetic test data stay in a private temp folder, never in the actual study."""
+    paths = ProjectPaths(tmp_path)
+    paths.ensure()
+    monkeypatch.setattr(modeling, "PATHS", paths)
+    monkeypatch.setattr(modeling, "load_settings", lambda: {"random_seed": 42})
+    rng = np.random.default_rng(14)
+    n = 500
+    dates = pd.Series(np.repeat(pd.date_range("2026-09-01", periods=25), 20))
+    frame = pd.DataFrame({
+        "observation_id": [f"test-{i}" for i in range(n)],
+        "station_id": [f"station-{i % 8}" for i in range(n)],
+        "service_date": dates.dt.strftime("%Y-%m-%d"),
+        "scheduled_time": dates.dt.strftime("%Y-%m-%dT10:00:00Z"),
+        "region": ["A", "B"] * (n // 2),
+        "transport_mode": ["bus", "bus", "train", "train"] * (n // 4),
+        "day_period": ["midday"] * n,
+        "is_weekend": dates.dt.dayofweek.ge(5).astype(int),
+        "precipitation": rng.uniform(0, 5, n),
+        "delay_minutes": rng.exponential(size=n),
+    })
+    frame.to_csv(paths.processed / "model_data.csv", index=False)
+    modeling.run_models()
+    specification = json.loads((paths.tables / "model_specification.json").read_text())
+    temporal = json.loads((paths.tables / "temporal_validation.json").read_text())
+    assert temporal["status"] == "evaluated"
+    assert len(temporal["folds"]) == 3
+    for fold in temporal["folds"]:
+        assert max(fold["train_dates"]) < min(fold["validation_dates"])
+        assert max(fold["validation_dates"]) < min(specification["test_dates"])
+    assert len(pd.read_csv(paths.tables / "temporal_validation.csv")) == 12
+    comparisons = pd.read_csv(paths.tables / "paired_model_comparisons.csv")
+    assert comparisons.status.eq("exploratory_day_bootstrap").all()
+    assert comparisons.test_dates.eq(5).all()
+    assert comparisons.ci_low.notna().all()
+    assert comparisons.ci_low.le(comparisons.ci_high).all()
+    from sptdelays import reporting
+
+    monkeypatch.setattr(reporting, "PATHS", paths)
+    (paths.tables / "quality_audit.json").write_text(json.dumps({
+        "status": "development", "errors": 0, "warnings": 1,
+        "coverage": {"rows": n, "service_dates": 25, "regions": ["A", "B"], "stations": 8},
+        "checks": [{"passed": False, "check": "study_duration", "detail": "25/28 dates"}],
+    }))
+    reporting.write_analysis_summary()
+    summary = (paths.root / "reports/analysis_summary.md").read_text(encoding="utf-8")
+    assert "No temporal stability claim" not in summary
+    assert "exploratory_day_bootstrap" in summary
+    assert "25/28 dates" in summary

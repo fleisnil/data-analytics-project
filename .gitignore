@@ -24,6 +24,7 @@ reports/tables/*.csv
 reports/tables/*.json
 reports/tables/*.txt
 reports/*.html
+reports/analysis_summary.md
 database/*.duckdb.wal
 *.joblib
 artifacts/*.zip

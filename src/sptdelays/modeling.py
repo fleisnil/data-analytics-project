@@ -14,6 +14,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
+from .evaluation import paired_day_comparison, rolling_date_splits
 from .settings import PATHS, load_settings
 
 NUMERIC_FEATURES = [
@@ -29,6 +30,14 @@ NUMERIC_FEATURES = [
 CATEGORICAL_FEATURES = ["region", "transport_mode", "day_period", "weekday", "operator"]
 GROUP_BASELINE_COLUMNS = ["region", "transport_mode", "day_period"]
 GROUP_BASELINE_MIN_ROWS = 10
+WEATHER_FEATURES = {"temperature_2m", "precipitation", "wind_speed_10m",
+                    "wind_gusts_10m", "snowfall"}
+PREDICTION_COLUMNS = {
+    "random_forest": "predicted_delay",
+    "forest_without_weather": "no_weather_delay",
+    "mean_baseline": "baseline_delay",
+    "group_mean_baseline": "group_baseline_delay",
+}
 
 
 def _metrics(y_true: pd.Series, y_pred: np.ndarray, label: str) -> dict:
@@ -37,6 +46,8 @@ def _metrics(y_true: pd.Series, y_pred: np.ndarray, label: str) -> dict:
         "n": len(y_true),
         "rmse": mean_squared_error(y_true, y_pred) ** 0.5,
         "mae": mean_absolute_error(y_true, y_pred),
+        "mean_error_pred_minus_actual": float(np.mean(y_pred - y_true.to_numpy())),
+        "p90_absolute_error": float(np.quantile(np.abs(y_pred - y_true.to_numpy()), .9)),
         # R-squared is undefined for a constant target, even with multiple rows.
         "r2": r2_score(y_true, y_pred) if len(y_true) > 1 and y_true.nunique() > 1 else np.nan,
     }
@@ -120,6 +131,74 @@ def _group_mean_baseline(
     return predictions, fallback
 
 
+def _fit_comparison(train, test, numeric, categorical, seed):
+    """Identical train/test rows and RF settings; only weather inputs differ."""
+    dropped = [col for col in numeric if train[col].isna().all()]
+    numeric = [col for col in numeric if col not in dropped]
+    features = [*numeric, *categorical]
+    model = _make_pipeline(numeric, categorical, seed)
+    model.fit(train[features], train["delay_minutes"])
+    prediction = model.predict(test[features]).clip(min=0)
+    no_weather_numeric = [col for col in numeric if col not in WEATHER_FEATURES]
+    ablation_features = [*no_weather_numeric, *categorical]
+    if no_weather_numeric == numeric:
+        no_weather_prediction = prediction.copy()
+        ablation_status = "no_usable_weather_features"
+    else:
+        ablation = _make_pipeline(no_weather_numeric, categorical, seed)
+        ablation.fit(train[ablation_features], train["delay_minutes"])
+        no_weather_prediction = ablation.predict(test[ablation_features]).clip(min=0)
+        ablation_status = "evaluated"
+    group_baseline, fallback = _group_mean_baseline(train, test)
+    predictions = {
+        "predicted_delay": prediction,
+        "no_weather_delay": no_weather_prediction,
+        "baseline_delay": np.repeat(train["delay_minutes"].mean(), len(test)),
+        "group_baseline_delay": group_baseline,
+    }
+    return model, predictions, fallback, {
+        "numeric_features": numeric, "features": features,
+        "dropped_all_missing_training_features": dropped,
+        "weather_ablation_status": ablation_status,
+        "weather_features": [col for col in numeric if col in WEATHER_FEATURES],
+        "without_weather_features": ablation_features,
+    }
+
+
+def _rolling_validation(development, numeric, categorical, seed):
+    splits = rolling_date_splits(development)
+    rows, folds = [], []
+    for number, (train, validation) in enumerate(splits, 1):
+        fold = {"fold": number, "train_rows": len(train), "validation_rows": len(validation),
+                "train_dates": sorted(train.service_date.unique().tolist()),
+                "validation_dates": sorted(validation.service_date.unique().tolist())}
+        if len(train) < 50:
+            fold["status"] = "insufficient_training_rows"
+            folds.append(fold)
+            continue
+        _, predictions, _, feature_info = _fit_comparison(
+            train, validation, numeric, categorical, seed
+        )
+        fold.update(status="evaluated", **feature_info)
+        folds.append(fold)
+        for name, column in PREDICTION_COLUMNS.items():
+            metrics = _metrics(validation.delay_minutes, predictions[column], name)
+            rows.append({**metrics, "fold": number, "train_rows": len(train),
+                         "train_last_date": max(fold["train_dates"]),
+                         "validation_first_date": min(fold["validation_dates"]),
+                         "validation_last_date": max(fold["validation_dates"]),
+                         "validation_dates": len(fold["validation_dates"])})
+    columns = ["group", "n", "rmse", "mae", "r2", "mean_error_pred_minus_actual",
+               "p90_absolute_error", "fold", "train_rows", "train_last_date",
+               "validation_first_date", "validation_last_date", "validation_dates"]
+    return pd.DataFrame(rows, columns=columns), {
+        "status": "evaluated" if rows else "insufficient_development_data",
+        "development_dates": int(development.service_date.nunique()), "folds": folds,
+        "policy": "Up to three expanding windows within development dates only; first half (at least two dates) trains initially; at least four development dates and 50 training rows required. Final holdout excluded. No hyperparameter tuning.",
+        "caveat": "Observed-date blocks can have unequal durations and call counts; inspect each fold. Shared stations/journeys and temporal dependence remain. A one-day run cannot demonstrate temporal stability.",
+    }
+
+
 def run_models() -> None:
     PATHS.ensure()
     settings = load_settings()
@@ -141,32 +220,27 @@ def run_models() -> None:
     coverage_columns = [*categorical, *(["station_id"] if "station_id" in data else [])]
     holdout_coverage = _holdout_coverage(train, test, coverage_columns)
     holdout_coverage.to_csv(PATHS.tables / "holdout_coverage.csv", index=False)
-    dropped_empty_features = [col for col in numeric if train[col].isna().all()]
-    numeric = [col for col in numeric if col not in dropped_empty_features]
-    pipeline = _make_pipeline(numeric, categorical, settings["random_seed"])
-    feature_cols = [*numeric, *categorical]
-    # Raw minutes align the forest's squared-error objective with RMSE and the mean baseline.
-    pipeline.fit(train[feature_cols], train["delay_minutes"])
-    prediction = pipeline.predict(test[feature_cols]).clip(min=0)
-    baseline = np.repeat(train["delay_minutes"].mean(), len(test))
-    group_baseline, group_fallback = _group_mean_baseline(train, test)
-    overall_metrics = [_metrics(test["delay_minutes"], prediction, "random_forest_overall")]
-    overall_metrics.append(_metrics(test["delay_minutes"], baseline, "mean_baseline"))
-    overall_metrics.append(_metrics(test["delay_minutes"], group_baseline, "group_mean_baseline"))
-    test = test.assign(
-        predicted_delay=prediction,
-        baseline_delay=baseline,
-        group_baseline_delay=group_baseline,
-        group_baseline_fallback=group_fallback,
+    rolling_metrics, rolling_spec = _rolling_validation(
+        train, numeric, categorical, settings["random_seed"]
     )
+    rolling_metrics.to_csv(PATHS.tables / "temporal_validation.csv", index=False)
+    (PATHS.tables / "temporal_validation.json").write_text(
+        json.dumps(rolling_spec, indent=2), encoding="utf-8"
+    )
+    pipeline, predictions, group_fallback, feature_info = _fit_comparison(
+        train, test, numeric, categorical, settings["random_seed"]
+    )
+    feature_cols = feature_info["features"]
+    test = test.assign(**predictions, group_baseline_fallback=group_fallback)
+    overall_metrics = [
+        _metrics(test.delay_minutes, predictions[column],
+                 "random_forest_overall" if name == "random_forest" else name)
+        for name, column in PREDICTION_COLUMNS.items()
+    ]
     subgroup_metrics: list[dict] = []
     for grouping in ["region", "transport_mode", "day_period"]:
         for name, group in test.groupby(grouping):
-            for model_name, prediction_col in [
-                ("random_forest", "predicted_delay"),
-                ("mean_baseline", "baseline_delay"),
-                ("group_mean_baseline", "group_baseline_delay"),
-            ]:
+            for model_name, prediction_col in PREDICTION_COLUMNS.items():
                 metrics = _metrics(
                     group["delay_minutes"],
                     group[prediction_col].to_numpy(),
@@ -177,6 +251,16 @@ def run_models() -> None:
                 subgroup_metrics.append(metrics)
     pd.DataFrame(overall_metrics).to_csv(PATHS.tables / "model_metrics.csv", index=False)
     pd.DataFrame(subgroup_metrics).to_csv(PATHS.tables / "subgroup_metrics.csv", index=False)
+    comparisons = pd.concat([
+        paired_day_comparison(test, column, seed=settings["random_seed"])
+        for column in ["baseline_delay", "group_baseline_delay", "no_weather_delay"]
+    ], ignore_index=True)
+    if feature_info["weather_ablation_status"] != "evaluated":
+        not_applicable = comparisons.reference_prediction.eq("no_weather_delay")
+        comparisons.loc[not_applicable, "status"] = "no_usable_weather_features"
+        comparisons.loc[not_applicable, ["ci_low", "ci_high"]] = np.nan
+        comparisons.loc[not_applicable, "bootstrap_repetitions"] = 0
+    comparisons.to_csv(PATHS.tables / "paired_model_comparisons.csv", index=False)
 
     importance = permutation_importance(
         pipeline,
@@ -206,6 +290,7 @@ def run_models() -> None:
             "day_period",
             "delay_minutes",
             "predicted_delay",
+            "no_weather_delay",
             "baseline_delay",
             "group_baseline_delay",
             "group_baseline_fallback",
@@ -260,6 +345,10 @@ def run_models() -> None:
     else:
         ols = ols_model.fit(cov_type="HC3")
         covariance_type = "HC3_single_station_fallback"
+    # statsmodels versions expose the Patsy design under different attribute names.
+    design = getattr(ols.model.data, "model_spec", None)
+    if design is None:
+        design = ols.model.data.design_info
     ols_table = pd.DataFrame(
         {
             "term": ols.params.index,
@@ -291,7 +380,10 @@ def run_models() -> None:
                 "train_dates": sorted(train["service_date"].unique().tolist()),
                 "test_dates": sorted(test["service_date"].unique().tolist()),
                 "preprocessing": "Medians and categories fitted on training rows only.",
-                "dropped_all_missing_training_features": dropped_empty_features,
+                **feature_info,
+                "temporal_validation_status": rolling_spec["status"],
+                "weather_ablation_note": "Same rows, RF settings and seed, with all listed weather features removed. Differences reflect predictive information conditional on other features, not causal weather effects. Weather can also proxy location/date. Concurrent/reanalysed weather is not a real-time forecast input.",
+                "uncertainty_note": "paired_model_comparisons.csv uses whole-date paired bootstrap intervals only with at least five test dates. This minimum is a safeguard, not a guarantee of reliable inference.",
                 "predictive_target": "delay_minutes (no logarithmic back-transformation)",
                 "permutation_importance_unit": "increase in holdout MSE (minutes squared)",
                 "holdout_use": "Evaluation and descriptive importance only; not used for tuning.",
@@ -308,6 +400,11 @@ def run_models() -> None:
                 },
                 "evaluation_caveat": "One-day results are development only. Weather is concurrent/reanalysed, not a deployable forecast. Shared journeys and stations can remain dependent.",
                 "ols_rows": len(ols_data),
+                "ols_reference_categories": {
+                    factor.name(): str(info.categories[0])
+                    for factor, info in design.factor_infos.items()
+                    if info.type == "categorical"
+                },
                 "ols_rows_excluded_missing_weather": len(data) - len(ols_data),
                 "ols_covariance_type": covariance_type,
                 "ols_station_clusters": int(n_clusters),

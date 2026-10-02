@@ -45,6 +45,38 @@ artifacts/          Final Moodle ZIP/PDF/video files (ignored by Git)
 
 ## Quick start in VS Code
 
+### Stronger research evaluation
+
+The saved-data pipeline now provides four complementary checks:
+
+- **Weather ablation:** identical training/test rows and forest settings, with
+  versus without all weather variables. This measures incremental predictive
+  information, not a causal weather effect.
+- **Expanding date-window validation:** up to three later-period checks inside
+  the development partition; the final holdout remains separate. Each fold
+  refits preprocessing, models and baselines on its own training data.
+- **Paired date-bootstrap comparisons:** error differences and exploratory
+  95% intervals against both baselines and the no-weather forest. Intervals are
+  withheld with fewer than five held-out dates. More calls on one date do not
+  replace more dates; serial dependence across dates remains a limitation.
+- **Readable results brief:** after **Analyse starten**, open
+  `reports/analysis_summary.md` in VS Code and press **Ctrl+Shift+V** for a preview.
+  It combines data limitations, model scores, weather comparison, temporal
+  stability and links to the evidence. `08_model_comparison.png` gives a compact
+  visual comparison. Generated data/results remain excluded from Git.
+
+New evidence tables are `temporal_validation.csv` / `.json` and
+`paired_model_comparisons.csv`; all four models also appear in subgroup metrics.
+Signed prediction bias and 90th-percentile absolute error complement MAE/RMSE.
+Notebook 04 explains how to interpret these outputs. The run manifest hashes
+the brief and selected evaluation results as well as the processed dataset.
+
+The currently saved one-day data **cannot** establish temporal robustness or
+support day-level uncertainty intervals. Skipped checks are reported explicitly.
+The four-date development threshold, 50-row training safeguard and five-date
+interval threshold are implementation choices, not lecturer requirements or
+guarantees of valid inference. No additional data is downloaded automatically.
+
 Install [uv](https://docs.astral.sh/uv/) or use a normal Python virtual environment.
 
 ### Start without typing terminal commands

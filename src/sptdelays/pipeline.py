@@ -52,7 +52,7 @@ def run_pipeline(source: str = "live") -> dict:
              ("quality", "run_quality_audit", []), ("database", "build_sqlite", []),
              ("duckdb_store", "build_duckdb", []), ("eda", "run_eda", []),
              ("modeling", "run_models", []), ("clustering", "run_clustering", []),
-             ("geo", "create_map", [])]
+             ("geo", "create_map", []), ("reporting", "write_analysis_summary", [])]
     save_manifest()
     for module_name, function_name, arguments in steps:
         started = perf_counter()
@@ -74,9 +74,15 @@ def run_pipeline(source: str = "live") -> dict:
         finally:
             step["seconds"] = round(perf_counter() - started, 3)
             save_manifest()
-    manifest["outputs"] = {"data/processed/model_data.csv": fingerprint(
-        PATHS.processed / "model_data.csv"
-    )}
+    evidence = [PATHS.processed / "model_data.csv", PATHS.root / "reports/analysis_summary.md",
+                PATHS.figures / "08_model_comparison.png"]
+    evidence.extend(PATHS.tables / name for name in [
+        "model_metrics.csv", "subgroup_metrics.csv", "model_specification.json",
+        "temporal_validation.csv", "temporal_validation.json", "paired_model_comparisons.csv",
+        "holdout_predictions.csv", "ols_associations.csv", "quality_audit.json",
+    ])
+    manifest["outputs"] = {str(path.relative_to(PATHS.root)).replace("\\", "/"): fingerprint(path)
+                           for path in evidence}
     manifest["finished_at_utc"] = datetime.now(UTC).isoformat()
     manifest["status"] = "completed"
     save_manifest()

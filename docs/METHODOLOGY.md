@@ -94,6 +94,75 @@ Metrics:
 
 Permutation importance supports interpretation but is not a causal effect measure.
 
+### Weather ablation
+
+A second forest uses exactly the same training and held-out rows, seed and
+hyperparameters, excluding temperature, precipitation, wind speed/gusts and
+snowfall. Its imputation/encoding is fitted separately on training data. An
+all-missing training weather feature is dropped even if later test values exist.
+If no weather features remain, the ablation is explicitly marked unavailable
+and the identical predictions are not interpreted as evidence that weather is
+irrelevant. Otherwise compare all four models overall and by region/mode/period.
+Incremental accuracy is conditional on the other features, sample and model;
+it does not identify a causal weather effect or validate a real-time forecast.
+Weather can also act as a proxy for location or date, especially in a one-day
+sample. OLS reference categories are now exported from the fitted design to
+`model_specification.json` and displayed in the results brief, so categorical
+coefficient comparisons can be explained without guessing the reference level.
+
+### Expanding date-window validation
+
+First reserve the final chronological holdout using the existing split policy.
+Within the remaining development data, use the first half of observed dates
+(at least two) as the initial training window. Partition the later observed
+dates into at most three consecutive validation blocks. Each fold trains on
+all earlier dates and validates on the next block. Each validation date occurs
+once; missing calendar dates are not invented, and fold duration/sample counts
+are exported for interpretation. At least four development dates and 50
+training rows per fold are required; insufficient folds are explicitly skipped.
+
+Each fold independently refits median imputation, category encoding, both
+forests and training-only baselines. No hyperparameters are tuned and the final
+holdout is never included in these additional checks. Models may still share
+stations/routes across periods; temporal validation is not new-station
+validation. Do not use these outputs to claim independence or national coverage.
+
+This follows the [scikit-learn guidance on avoiding preprocessing leakage](https://scikit-learn.org/stable/common_pitfalls.html)
+and [time-aware cross-validation](https://scikit-learn.org/stable/modules/cross_validation.html).
+Splitting whole observed dates rather than rows accommodates unequal numbers
+of calls per date; folds are not claimed to span identical calendar durations.
+
+### Paired uncertainty and error diagnostics
+
+For each reference (overall mean, group mean, no-weather forest), report full
+forest error minus reference error on identical held-out rows. Negative values
+favor the full forest. In addition to MAE/RMSE/R-squared, export signed bias
+(prediction minus observed delay) and the 90th percentile absolute error.
+
+With at least five held-out dates, sample whole dates with replacement 1,000
+times (seed 42), using the same sampled dates for both models. Aggregate absolute
+and squared errors and counts within each date before resampling; this is
+equivalent to resampling all calls of each selected date, including repeated
+selections, without materializing a large copied dataset. Recalculate the
+call-weighted MAE and RMSE differences and use their 2.5%/97.5% quantiles.
+
+These are exploratory paired percentile-bootstrap intervals **conditional on
+the fitted models**, not prediction intervals. Dependence within dates is
+preserved, but exchangeability of dates, serial dependence across days, sampling
+bias and training uncertainty remain unresolved. Five dates is only a minimum
+safeguard, not evidence of adequate precision. No intervals are generated with
+fewer dates; the point differences remain descriptive. There is no automatic
+significance flag or winner selection across these comparisons.
+
+### Generated results brief
+
+The pipeline's final stage creates `reports/analysis_summary.md` and a held-out
+error chart. It reads the saved quality/model/evaluation outputs and preserves
+warnings, skipped checks and interpretation caveats. Selected result hashes
+are recorded in the completed run manifest. Rebuild the complete pipeline after
+changing data or code; the brief is not automatically refreshed by individual
+model/notebook commands and must not be treated as live state.
+
 ## k-means bonus analysis
 
 Stations are aggregated to profile-level measures: mean, median and 90th-percentile delay, five-minute-delay rate and average weather. Features are standardized. Supported candidate k values from 2 to 6 are compared using silhouette score; the selected solution is visualized after PCA projection. Constant or unavailable features are recorded in the clustering specification.
