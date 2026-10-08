@@ -194,6 +194,7 @@ class RegressionModelTest(
                     figure_dir=figure_dir,
                     model_dir=model_dir,
                     random_forest_estimators=25,
+                    gradient_boosting_estimators=25,
                 )
             )
 
@@ -209,18 +210,23 @@ class RegressionModelTest(
                     "median_baseline",
                     "linear_regression",
                     "random_forest",
+                    "gradient_boosting_mae",
                 },
+            )
+            self.assertIn(
+                "mae_improvement_vs_baseline_pct",
+                metrics.columns,
             )
             self.assertTrue(
                 (
                     table_dir
-                    / "model_regression_metrics.csv"
+                    / "model_selection_summary.csv"
                 ).exists()
             )
             self.assertTrue(
                 (
                     model_dir
-                    / "random_forest_regression.joblib"
+                    / "gradient_boosting_mae.joblib"
                 ).exists()
             )
             self.assertTrue(

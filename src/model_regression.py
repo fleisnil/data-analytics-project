@@ -6,6 +6,7 @@ Models:
 - median baseline
 - linear regression
 - random forest regression
+- gradient boosting with absolute-error loss
 
 The split is chronological rather than random. When batch_id is available,
 entire collection batches are kept together so the test set represents later
@@ -27,7 +28,10 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyRegressor
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import (
+    GradientBoostingRegressor,
+    RandomForestRegressor,
+)
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LinearRegression
@@ -73,9 +77,7 @@ NUMERIC_CANDIDATES = [
 ]
 
 EXCLUDED_FEATURES = {
-    "predicted_delay_minutes": (
-        "Target variable."
-    ),
+    "predicted_delay_minutes": "Target variable.",
     "estimated_departure": (
         "Direct source of the target; using it would be target leakage."
     ),
@@ -117,9 +119,7 @@ EXCLUDED_FEATURES = {
 }
 
 
-def load_dataset(
-    path: Path = DATASET_PATH,
-) -> pd.DataFrame:
+def load_dataset(path: Path = DATASET_PATH) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
             f"Analysis dataset not found: {path}. "
@@ -131,12 +131,7 @@ def load_dataset(
 
 def prepare_dataset(
     df: pd.DataFrame,
-) -> tuple[
-    pd.DataFrame,
-    list[str],
-    list[str],
-]:
-    """Normalize model columns and choose the available core features."""
+) -> tuple[pd.DataFrame, list[str], list[str]]:
     if TARGET_COLUMN not in df.columns:
         raise ValueError(
             f"Dataset is missing target column: {TARGET_COLUMN}"
@@ -188,10 +183,7 @@ def prepare_dataset(
             )
 
     out = out.dropna(
-        subset=[
-            TIME_COLUMN,
-            TARGET_COLUMN,
-        ]
+        subset=[TIME_COLUMN, TARGET_COLUMN]
     ).copy()
 
     categorical = [
@@ -216,17 +208,7 @@ def prepare_dataset(
 def temporal_split(
     df: pd.DataFrame,
     train_fraction: float = TRAIN_FRACTION,
-) -> tuple[
-    pd.DataFrame,
-    pd.DataFrame,
-    str,
-]:
-    """
-    Create a chronological train/test split.
-
-    Prefer whole batch_id groups when available so observations from one
-    collection run cannot be divided between train and test.
-    """
+) -> tuple[pd.DataFrame, pd.DataFrame, str]:
     if not 0 < train_fraction < 1:
         raise ValueError(
             "train_fraction must be between 0 and 1."
@@ -259,9 +241,7 @@ def temporal_split(
             )
 
             train_batches = set(
-                batch_times.index[
-                    :split_index
-                ]
+                batch_times.index[:split_index]
             )
 
             train = df[
@@ -275,10 +255,7 @@ def temporal_split(
                 )
             ].copy()
 
-            if (
-                len(train) > 0
-                and len(test) > 0
-            ):
+            if len(train) and len(test):
                 return (
                     train.sort_values(
                         TIME_COLUMN
@@ -330,19 +307,12 @@ def temporal_split(
         ordered[TIME_COLUMN] >= cutoff
     ].copy()
 
-    if (
-        len(train) == 0
-        or len(test) == 0
-    ):
+    if not len(train) or not len(test):
         raise ValueError(
             "Chronological split produced an empty train or test set."
         )
 
-    return (
-        train,
-        test,
-        "timestamp",
-    )
+    return train, test, "timestamp"
 
 
 def make_preprocessor(
@@ -362,7 +332,8 @@ def make_preprocessor(
             (
                 "onehot",
                 OneHotEncoder(
-                    handle_unknown="ignore"
+                    handle_unknown="ignore",
+                    sparse_output=False,
                 ),
             ),
         ]
@@ -409,6 +380,7 @@ def build_models(
     numeric: list[str],
     *,
     random_forest_estimators: int = 400,
+    gradient_boosting_estimators: int = 150,
 ) -> dict[str, object]:
     linear = Pipeline(
         steps=[
@@ -451,12 +423,40 @@ def build_models(
         ]
     )
 
+    gradient_boosting = Pipeline(
+        steps=[
+            (
+                "preprocessor",
+                make_preprocessor(
+                    categorical,
+                    numeric,
+                    scale_numeric=False,
+                ),
+            ),
+            (
+                "model",
+                GradientBoostingRegressor(
+                    loss="absolute_error",
+                    n_estimators=(
+                        gradient_boosting_estimators
+                    ),
+                    learning_rate=0.03,
+                    max_depth=2,
+                    random_state=RANDOM_STATE,
+                ),
+            ),
+        ]
+    )
+
     return {
         "median_baseline": DummyRegressor(
             strategy="median"
         ),
         "linear_regression": linear,
         "random_forest": random_forest,
+        "gradient_boosting_mae": (
+            gradient_boosting
+        ),
     }
 
 
@@ -668,10 +668,65 @@ def permutation_importance_table(
     )
 
 
+def build_selection_summary(
+    metrics_table: pd.DataFrame,
+) -> pd.DataFrame:
+    baseline_mae = float(
+        metrics_table.loc[
+            metrics_table["model"]
+            == "median_baseline",
+            "mae",
+        ].iloc[0]
+    )
+
+    best_row = (
+        metrics_table.sort_values(
+            "mae"
+        ).iloc[0]
+    )
+
+    best_mae = float(
+        best_row["mae"]
+    )
+    improvement = (
+        100
+        * (
+            baseline_mae
+            - best_mae
+        )
+        / baseline_mae
+        if baseline_mae
+        else np.nan
+    )
+
+    return pd.DataFrame(
+        [
+            {
+                "primary_metric": "MAE",
+                "best_model": (
+                    best_row["model"]
+                ),
+                "best_mae": best_mae,
+                "baseline_mae": (
+                    baseline_mae
+                ),
+                "mae_improvement_vs_baseline_pct": (
+                    improvement
+                ),
+                "beats_baseline": bool(
+                    best_mae
+                    < baseline_mae
+                ),
+            }
+        ]
+    )
+
+
 def save_figures(
     metrics_table: pd.DataFrame,
     predictions: pd.DataFrame,
     importance: pd.DataFrame,
+    best_model_name: str,
     figure_dir: Path = FIGURE_DIR,
 ) -> None:
     figure_dir.mkdir(
@@ -680,7 +735,7 @@ def save_figures(
     )
 
     plt.figure(
-        figsize=(8, 5)
+        figsize=(9, 5)
     )
     metrics_table.set_index(
         "model"
@@ -711,7 +766,7 @@ def save_figures(
         "actual_delay"
     ]
     predicted = predictions[
-        "pred_random_forest"
+        f"pred_{best_model_name}"
     ]
 
     plt.figure(
@@ -743,15 +798,15 @@ def save_figures(
         "Observed predicted delay (minutes)"
     )
     plt.ylabel(
-        "Random-forest prediction (minutes)"
+        f"{best_model_name} prediction (minutes)"
     )
     plt.title(
-        "Random forest: predicted vs observed delay"
+        "Best-MAE model: predicted vs observed delay"
     )
     plt.tight_layout()
     plt.savefig(
         figure_dir
-        / "13_random_forest_predicted_vs_observed.png",
+        / "13_best_model_predicted_vs_observed.png",
         dpi=180,
         bbox_inches="tight",
     )
@@ -779,49 +834,50 @@ def save_figures(
         "Test observations"
     )
     plt.title(
-        "Random-forest residual distribution"
+        "Best-MAE model residual distribution"
     )
     plt.tight_layout()
     plt.savefig(
         figure_dir
-        / "14_random_forest_residuals.png",
+        / "14_best_model_residuals.png",
         dpi=180,
         bbox_inches="tight",
     )
     plt.close()
 
-    top = (
-        importance.head(15)
-        .sort_values(
-            "importance_mae_increase",
-            ascending=True,
+    if not importance.empty:
+        top = (
+            importance.head(15)
+            .sort_values(
+                "importance_mae_increase",
+                ascending=True,
+            )
         )
-    )
 
-    plt.figure(
-        figsize=(9, 6)
-    )
-    plt.barh(
-        top["feature"],
-        top[
-            "importance_mae_increase"
-        ],
-    )
-    plt.xlabel(
-        "Increase in MAE after permutation"
-    )
-    plt.ylabel("Feature")
-    plt.title(
-        "Random-forest permutation importance"
-    )
-    plt.tight_layout()
-    plt.savefig(
-        figure_dir
-        / "15_random_forest_permutation_importance.png",
-        dpi=180,
-        bbox_inches="tight",
-    )
-    plt.close()
+        plt.figure(
+            figsize=(9, 6)
+        )
+        plt.barh(
+            top["feature"],
+            top[
+                "importance_mae_increase"
+            ],
+        )
+        plt.xlabel(
+            "Increase in MAE after permutation"
+        )
+        plt.ylabel("Feature")
+        plt.title(
+            "Best-model permutation importance"
+        )
+        plt.tight_layout()
+        plt.savefig(
+            figure_dir
+            / "15_best_model_permutation_importance.png",
+            dpi=180,
+            bbox_inches="tight",
+        )
+        plt.close()
 
 
 def run_regression_analysis(
@@ -831,6 +887,7 @@ def run_regression_analysis(
     figure_dir: Path = FIGURE_DIR,
     model_dir: Path = MODEL_DIR,
     random_forest_estimators: int = 400,
+    gradient_boosting_estimators: int = 150,
 ) -> dict[str, pd.DataFrame]:
     clean, categorical, numeric = (
         prepare_dataset(df)
@@ -861,6 +918,9 @@ def run_regression_analysis(
         numeric,
         random_forest_estimators=(
             random_forest_estimators
+        ),
+        gradient_boosting_estimators=(
+            gradient_boosting_estimators
         ),
     )
 
@@ -926,20 +986,73 @@ def run_regression_analysis(
         metrics_rows
     )
 
+    baseline_mae = float(
+        metrics_table.loc[
+            metrics_table["model"]
+            == "median_baseline",
+            "mae",
+        ].iloc[0]
+    )
     metrics_table[
-        ["mae", "rmse", "r2"]
+        "mae_improvement_vs_baseline_pct"
+    ] = (
+        100
+        * (
+            baseline_mae
+            - metrics_table["mae"]
+        )
+        / baseline_mae
+    )
+
+    metrics_table[
+        [
+            "mae",
+            "rmse",
+            "r2",
+            "mae_improvement_vs_baseline_pct",
+        ]
     ] = metrics_table[
-        ["mae", "rmse", "r2"]
+        [
+            "mae",
+            "rmse",
+            "r2",
+            "mae_improvement_vs_baseline_pct",
+        ]
     ].round(4)
 
-    importance = (
-        permutation_importance_table(
-            models["random_forest"],
-            x_test,
-            y_test,
-            feature_columns,
+    selection_summary = (
+        build_selection_summary(
+            metrics_table
         )
     )
+    best_model_name = str(
+        selection_summary.loc[
+            0,
+            "best_model",
+        ]
+    )
+
+    if best_model_name == (
+        "median_baseline"
+    ):
+        importance = pd.DataFrame(
+            columns=[
+                "feature",
+                "importance_mae_increase",
+                "importance_std",
+            ]
+        )
+    else:
+        importance = (
+            permutation_importance_table(
+                models[
+                    best_model_name
+                ],
+                x_test,
+                y_test,
+                feature_columns,
+            )
+        )
 
     split_summary = (
         build_split_summary(
@@ -994,13 +1107,16 @@ def run_regression_analysis(
         "model_regression_metrics": (
             metrics_table
         ),
+        "model_selection_summary": (
+            selection_summary
+        ),
         "model_split_summary": (
             split_summary
         ),
         "model_feature_manifest": (
             feature_manifest
         ),
-        "model_random_forest_permutation_importance": (
+        "model_best_permutation_importance": (
             importance
         ),
         "model_metrics_by_city": (
@@ -1015,7 +1131,8 @@ def run_regression_analysis(
         outputs.items()
     ):
         table.to_csv(
-            table_dir / f"{name}.csv",
+            table_dir
+            / f"{name}.csv",
             index=False,
         )
 
@@ -1025,21 +1142,25 @@ def run_regression_analysis(
         index=False,
     )
 
-    joblib.dump(
-        models["linear_regression"],
-        model_dir
-        / "linear_regression.joblib",
-    )
-    joblib.dump(
-        models["random_forest"],
-        model_dir
-        / "random_forest_regression.joblib",
-    )
+    for model_name, model in (
+        models.items()
+    ):
+        if model_name == (
+            "median_baseline"
+        ):
+            continue
+
+        joblib.dump(
+            model,
+            model_dir
+            / f"{model_name}.joblib",
+        )
 
     save_figures(
         metrics_table,
         predictions,
         importance,
+        best_model_name,
         figure_dir,
     )
 
@@ -1082,17 +1203,36 @@ def main() -> int:
     )
 
     print(
-        "\nRandom-forest permutation importance:"
+        "\nModel selection:"
     )
     print(
         outputs[
-            "model_random_forest_permutation_importance"
-        ]
-        .head(15)
-        .to_string(
+            "model_selection_summary"
+        ].to_string(
             index=False
         )
     )
+
+    importance = outputs[
+        "model_best_permutation_importance"
+    ]
+
+    if not importance.empty:
+        print(
+            "\nBest-model permutation importance:"
+        )
+        print(
+            importance
+            .head(15)
+            .to_string(
+                index=False
+            )
+        )
+    else:
+        print(
+            "\nBest-model permutation importance: "
+            "not reported because the median baseline has the lowest MAE."
+        )
 
     print(
         "\nLeakage protection:"

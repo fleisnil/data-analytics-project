@@ -198,3 +198,10 @@ The core feature set contains operational factors (region, transport mode, rail/
 Target leakage is explicitly prevented. `estimated_departure`, `is_predicted_delayed_5min`, the target itself and other direct or near-direct target fields are excluded. High-cardinality journey/service identifiers are also excluded from the core model to reduce memorisation.
 
 The random forest is interpreted using permutation importance on the held-out chronological test set. Model errors are also reported separately by city and transport mode so the modelling component answers more than a pure prediction question.
+
+
+### Regression model follow-up after first live run
+
+The first live regression run showed that neither linear regression nor random forest improved the primary MAE metric over the median baseline. This is a valid model result rather than a reason to hide the baseline: the currently available operational, temporal and weather variables explain only limited variation in the point prediction of `predicted_delay_minutes`.
+
+A fourth model, gradient boosting with `absolute_error` loss, is therefore added as a robustness check because the target is strongly concentrated near zero with a small number of much larger delays. The model-selection table reports improvement in MAE relative to the median baseline. Feature importance is only interpreted for a non-baseline model when it actually has the lowest test-set MAE. This avoids over-interpreting feature importance from a model that predicts worse than a simple baseline.

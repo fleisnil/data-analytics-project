@@ -163,7 +163,7 @@ Train and evaluate the regression models:
 python src/model_regression.py
 ```
 
-The modelling script compares a median baseline, linear regression and random forest on a chronological 80/20 split. Entire collection batches are kept together when `batch_id` is available. Evaluation uses MAE, RMSE and R², plus performance comparisons by city and transport mode. Random-forest permutation importance is calculated on the chronological test set.
+The modelling script compares a median baseline, linear regression, random forest and an MAE-optimised gradient boosting regressor on a chronological 80/20 split. Entire collection batches are kept together when `batch_id` is available. Evaluation uses MAE, RMSE and R², plus performance comparisons by city and transport mode. The output also reports MAE improvement versus the median baseline. Permutation importance is calculated for the best-MAE non-baseline model; if the baseline remains best, no feature-importance claim is made.
 
 The statistics script writes reproducible CSV tables to `results/tables/`. It includes Spearman weather correlations with p-values, Kruskal-Wallis group comparisons with effect sizes, Chi-square tests with assumption checks, a wet-vs-dry comparison and delay-threshold class-balance sensitivity.
 

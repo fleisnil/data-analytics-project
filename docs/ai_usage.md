@@ -106,3 +106,12 @@ This document records meaningful AI assistance, including failures and correctio
 **Design decision:** Regression on `predicted_delay_minutes` is used as the primary model instead of forcing the highly imbalanced five-minute classification target. MAE is the primary evaluation metric, with RMSE and R² reported as complementary metrics.
 
 **Lesson:** Model choice should follow the observed target distribution and research question. A technically valid classification threshold can still be a poor modelling choice when the positive class is too rare.
+
+
+## 2026-10-08 — Regression follow-up after weak baseline performance
+
+**Observed result:** On the chronological test set, the median baseline achieved lower MAE than both linear regression and random forest. The first random-forest permutation importance therefore could not be treated as evidence that those variables formed a useful predictive model.
+
+**AI contribution:** The modelling pipeline was revised to add an MAE-optimised gradient boosting regressor, report percentage MAE improvement relative to the baseline, and only calculate/interpret permutation importance for the model that actually has the lowest MAE. If the median baseline remains best, the code explicitly suppresses feature-importance interpretation.
+
+**Lesson:** A complex model should not be preferred merely because it produces feature importance. Baselines must remain part of model selection, and a model that fails to beat the baseline is itself an informative result.
