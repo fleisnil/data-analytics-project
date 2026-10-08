@@ -115,3 +115,14 @@ This document records meaningful AI assistance, including failures and correctio
 **AI contribution:** The modelling pipeline was revised to add an MAE-optimised gradient boosting regressor, report percentage MAE improvement relative to the baseline, and only calculate/interpret permutation importance for the model that actually has the lowest MAE. If the median baseline remains best, the code explicitly suppresses feature-importance interpretation.
 
 **Lesson:** A complex model should not be preferred merely because it produces feature importance. Baselines must remain part of model selection, and a model that fails to beat the baseline is itself an informative result.
+
+
+## 2026-10-08 — Presentation-ready synthesis
+
+**Task:** Turn the current EDA, statistical and modelling results into a concise research-question answer and presentation graphics.
+
+**AI contribution:** A synthesis script was designed to calculate MAE improvement over the median baseline by region and transport mode, generate a compact presentation figure, and combine the key numerical results into a reproducible summary.
+
+**Validation principle:** The synthesis reads only previously generated analysis outputs; it does not refit models or silently change the statistical results. The dated `docs/current_findings.md` file is explicitly labelled as a snapshot because data collection may continue.
+
+**Lesson:** Presentation conclusions should combine data quality, statistical evidence, effect sizes and model performance rather than selecting only the most favourable result.

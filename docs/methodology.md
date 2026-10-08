@@ -183,11 +183,12 @@ Regression is the primary modelling task in `src/model_regression.py`.
 
 The observed five-minute classification target is currently very imbalanced, while the continuous `predicted_delay_minutes` outcome preserves more information. Regression therefore avoids choosing an arbitrary delay threshold only to make the classification task easier.
 
-Three models are compared:
+Four models are compared:
 
 - median dummy regressor as a baseline
 - linear regression as an interpretable reference model
 - random forest regression for non-linear relationships and interactions
+- gradient boosting regression with absolute-error loss as a robust model for the strongly right-skewed target
 
 The split is chronological (80% earlier observations for training, 20% later observations for testing). When `batch_id` is available, complete collection batches are kept together so observations from one collection run cannot appear in both train and test.
 
@@ -197,7 +198,7 @@ The core feature set contains operational factors (region, transport mode, rail/
 
 Target leakage is explicitly prevented. `estimated_departure`, `is_predicted_delayed_5min`, the target itself and other direct or near-direct target fields are excluded. High-cardinality journey/service identifiers are also excluded from the core model to reduce memorisation.
 
-The random forest is interpreted using permutation importance on the held-out chronological test set. Model errors are also reported separately by city and transport mode so the modelling component answers more than a pure prediction question.
+Permutation importance is calculated on the held-out chronological test set for the best-MAE non-baseline model. Model errors are also reported separately by city and transport mode so the modelling component answers more than a pure prediction question.
 
 
 ### Regression model follow-up after first live run
@@ -205,3 +206,12 @@ The random forest is interpreted using permutation importance on the held-out ch
 The first live regression run showed that neither linear regression nor random forest improved the primary MAE metric over the median baseline. This is a valid model result rather than a reason to hide the baseline: the currently available operational, temporal and weather variables explain only limited variation in the point prediction of `predicted_delay_minutes`.
 
 A fourth model, gradient boosting with `absolute_error` loss, is therefore added as a robustness check because the target is strongly concentrated near zero with a small number of much larger delays. The model-selection table reports improvement in MAE relative to the median baseline. Feature importance is only interpreted for a non-baseline model when it actually has the lowest test-set MAE. This avoids over-interpreting feature importance from a model that predicts worse than a simple baseline.
+
+
+## 14. Presentation-ready synthesis
+
+`src/final_results.py` combines the generated EDA, statistical and modelling outputs into presentation-ready material. It does not refit any model.
+
+The script creates a compact comparison of MAE improvement over the median baseline by region and transport mode, a final key-findings table, and a Markdown summary. The summary explicitly keeps together evidence from descriptive analysis, statistical tests and held-out model evaluation so the final answer to the research question is not based on a single method.
+
+The current presentation draft is documented in `docs/current_findings.md`. Because automated collection may continue, the generated tables and figures should be rerun before final submission and the dated findings document should only be treated as a snapshot.

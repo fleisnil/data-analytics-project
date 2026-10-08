@@ -163,6 +163,14 @@ Train and evaluate the regression models:
 python src/model_regression.py
 ```
 
+Build the presentation-ready result summary and comparison figure:
+
+```bash
+python src/final_results.py
+```
+
+This creates a compact MAE-improvement figure by region and transport mode, a final key-findings table and a generated Markdown summary for the presentation.
+
 The modelling script compares a median baseline, linear regression, random forest and an MAE-optimised gradient boosting regressor on a chronological 80/20 split. Entire collection batches are kept together when `batch_id` is available. Evaluation uses MAE, RMSE and R², plus performance comparisons by city and transport mode. The output also reports MAE improvement versus the median baseline. Permutation importance is calculated for the best-MAE non-baseline model; if the baseline remains best, no feature-importance claim is made.
 
 The statistics script writes reproducible CSV tables to `results/tables/`. It includes Spearman weather correlations with p-values, Kruskal-Wallis group comparisons with effect sizes, Chi-square tests with assumption checks, a wet-vs-dry comparison and delay-threshold class-balance sensitivity.
@@ -201,6 +209,7 @@ python src/database.py
 python src/eda.py
 python src/statistics_analysis.py
 python src/model_regression.py
+python src/final_results.py
 ```
 
 The sync script does not switch branches and does not commit data to `main`.
@@ -254,8 +263,9 @@ Core visualisations will include:
 - hourly delay pattern
 - weather vs delay plots
 - collection-period time series
-- model confusion matrix / ROC or precision-recall curve
-- feature importance
+- regression model MAE comparison
+- best-model feature importance
+- MAE improvement vs baseline by region and transport mode
 
 A geographic map can be added as a bonus analysis.
 
