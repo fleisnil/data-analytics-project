@@ -93,3 +93,16 @@ This document records meaningful AI assistance, including failures and correctio
 **Important finding:** The provisional five-minute classification target is currently highly imbalanced. The analysis therefore reports class balance for thresholds from one to five minutes and does not automatically treat five minutes as the final modelling threshold.
 
 **Lesson:** Statistical significance alone is not enough. Effect sizes, test assumptions, repeated measurement structure and target-class balance must be checked before interpretation or modelling.
+
+
+## 2026-10-08 — Regression modelling design
+
+**Task:** Build the main predictive model after the threshold-sensitivity analysis showed that the five-minute classification target was highly imbalanced.
+
+**AI contribution:** A modelling pipeline was designed with a median baseline, linear regression, random forest regression, chronological train/test splitting, leakage protection, grouped evaluation and permutation importance.
+
+**Validation:** The modelling code includes unit tests with synthetic time-ordered collection batches. The tests verify that batches are not split across train and test, that leakage variables such as `estimated_departure` are excluded, and that the expected metric/model/figure outputs are created.
+
+**Design decision:** Regression on `predicted_delay_minutes` is used as the primary model instead of forcing the highly imbalanced five-minute classification target. MAE is the primary evaluation metric, with RMSE and R² reported as complementary metrics.
+
+**Lesson:** Model choice should follow the observed target distribution and research question. A technically valid classification threshold can still be a poor modelling choice when the positive class is too rare.

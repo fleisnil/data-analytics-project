@@ -157,6 +157,14 @@ Run the inferential statistics and threshold checks:
 python src/statistics_analysis.py
 ```
 
+Train and evaluate the regression models:
+
+```bash
+python src/model_regression.py
+```
+
+The modelling script compares a median baseline, linear regression and random forest on a chronological 80/20 split. Entire collection batches are kept together when `batch_id` is available. Evaluation uses MAE, RMSE and R², plus performance comparisons by city and transport mode. Random-forest permutation importance is calculated on the chronological test set.
+
 The statistics script writes reproducible CSV tables to `results/tables/`. It includes Spearman weather correlations with p-values, Kruskal-Wallis group comparisons with effect sizes, Chi-square tests with assumption checks, a wet-vs-dry comparison and delay-threshold class-balance sensitivity.
 
 The EDA script creates descriptive CSV tables in `results/tables/` and PNG figures in `results/figures/`. These outputs are regenerated from the current analysis dataset and remain ignored by Git.
@@ -192,6 +200,7 @@ python src/build_dataset.py
 python src/database.py
 python src/eda.py
 python src/statistics_analysis.py
+python src/model_regression.py
 ```
 
 The sync script does not switch branches and does not commit data to `main`.
@@ -206,8 +215,9 @@ The sync script does not switch branches and does not commit data to `main`.
 6. Perform non-graphical and graphical exploratory data analysis.
 7. Compare delay patterns across regions, transport modes, weekdays and time periods.
 8. Run statistical tests where appropriate.
-9. Build and evaluate a classification model for a documented delay threshold.
-10. Interpret model results in relation to the research question.
+9. Build and evaluate regression models for `predicted_delay_minutes` using a chronological test set.
+10. Compare model performance and feature importance across regions and transport modes, and interpret results in relation to the research question.
+11. Keep classification as an optional extension only if a delay threshold can be justified without an unusably imbalanced target.
 
 ### Current EDA outputs
 

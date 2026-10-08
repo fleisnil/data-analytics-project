@@ -175,3 +175,26 @@ Weather p-values require special care because many departures can share exactly 
 A Mann-Whitney U comparison is included for wet versus dry weather groups. Its result must be interpreted together with the number of wet groups because precipitation can still be sparse.
 
 Finally, the script reports the observed positive-class share for delay thresholds from one to five minutes. This is used to justify the eventual modelling target instead of selecting the five-minute threshold without checking class balance.
+
+
+## 13. Regression modelling
+
+Regression is the primary modelling task in `src/model_regression.py`.
+
+The observed five-minute classification target is currently very imbalanced, while the continuous `predicted_delay_minutes` outcome preserves more information. Regression therefore avoids choosing an arbitrary delay threshold only to make the classification task easier.
+
+Three models are compared:
+
+- median dummy regressor as a baseline
+- linear regression as an interpretable reference model
+- random forest regression for non-linear relationships and interactions
+
+The split is chronological (80% earlier observations for training, 20% later observations for testing). When `batch_id` is available, complete collection batches are kept together so observations from one collection run cannot appear in both train and test.
+
+Evaluation metrics are MAE, RMSE and R². MAE is the primary metric because delay values are right-skewed and contain occasional larger values. RMSE is reported to show sensitivity to larger errors, while R² provides a relative goodness-of-fit measure.
+
+The core feature set contains operational factors (region, transport mode, rail/local station type, product category), temporal factors (hour, weekday, weekend) and weather factors (temperature, precipitation, humidity, wind, gust and station pressure).
+
+Target leakage is explicitly prevented. `estimated_departure`, `is_predicted_delayed_5min`, the target itself and other direct or near-direct target fields are excluded. High-cardinality journey/service identifiers are also excluded from the core model to reduce memorisation.
+
+The random forest is interpreted using permutation importance on the held-out chronological test set. Model errors are also reported separately by city and transport mode so the modelling component answers more than a pure prediction question.
