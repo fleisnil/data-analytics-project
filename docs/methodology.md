@@ -160,3 +160,18 @@ The script produces both non-graphical and graphical EDA. Non-graphical outputs 
 Delay rates are shown as percentages within groups rather than raw delayed counts wherever possible. This is important because the number of selected observations can differ across regions and transport modes.
 
 The collection is still growing. Current EDA output must therefore be described as provisional and descriptive rather than as evidence of stable differences or causal weather effects.
+
+
+## 12. Statistical tests
+
+Inferential statistics are implemented in `src/statistics_analysis.py`.
+
+The delay distribution is strongly non-normal and contains many observations close to zero. Therefore the main group comparison uses the non-parametric Kruskal-Wallis test rather than relying only on a mean-based ANOVA. The output also reports epsilon-squared as an effect-size measure.
+
+A Chi-square test evaluates the association between transport mode and the provisional five-minute delayed/not-delayed indicator. The script reports Cramer's V and explicitly checks whether all expected cell counts are at least five. A city-level Chi-square result is also produced, but it must not be interpreted when the expected-count assumption is violated.
+
+Weather p-values require special care because many departures can share exactly the same MeteoSwiss observation. The script therefore first aggregates the transport observations by city and weather reference timestamp. Spearman correlations are calculated both overall and after within-city centering, which reduces simple confounding from persistent differences between regions.
+
+A Mann-Whitney U comparison is included for wet versus dry weather groups. Its result must be interpreted together with the number of wet groups because precipitation can still be sparse.
+
+Finally, the script reports the observed positive-class share for delay thresholds from one to five minutes. This is used to justify the eventual modelling target instead of selecting the five-minute threshold without checking class balance.

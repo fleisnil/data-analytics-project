@@ -151,6 +151,14 @@ Generate the reproducible EDA tables and visualisations:
 python src/eda.py
 ```
 
+Run the inferential statistics and threshold checks:
+
+```bash
+python src/statistics_analysis.py
+```
+
+The statistics script writes reproducible CSV tables to `results/tables/`. It includes Spearman weather correlations with p-values, Kruskal-Wallis group comparisons with effect sizes, Chi-square tests with assumption checks, a wet-vs-dry comparison and delay-threshold class-balance sensitivity.
+
 The EDA script creates descriptive CSV tables in `results/tables/` and PNG figures in `results/figures/`. These outputs are regenerated from the current analysis dataset and remain ignored by Git.
 
 This creates `data/database/transport_weather.sqlite` locally and executes the documented SQL queries from `sql/analysis_queries.sql`. The SQLite file and generated result CSVs are reproducible outputs and are not committed to Git.
@@ -183,6 +191,7 @@ python src/sync_collection_data.py
 python src/build_dataset.py
 python src/database.py
 python src/eda.py
+python src/statistics_analysis.py
 ```
 
 The sync script does not switch branches and does not commit data to `main`.

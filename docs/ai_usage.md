@@ -80,3 +80,16 @@ This document records meaningful AI assistance, including failures and correctio
 **Limitation:** The current live dataset is still small and temporally incomplete, so the code explicitly treats current visual patterns as descriptive and provisional.
 
 **Lesson:** Building reusable analysis code early is useful, but substantive interpretation should wait until the sampling period contains enough days, time periods and weather variation.
+
+
+## 2026-10-08 — Statistical analysis design
+
+**Task:** Add inferential statistics after the first multi-day automated collection period.
+
+**AI contribution:** A statistical-analysis script was designed with non-parametric group tests, effect sizes, Chi-square assumption checks, weather correlations with p-values and delay-threshold sensitivity.
+
+**Validation:** The logic was tested on a synthetic dataset and separately checked against the current 3,347-row integrated dataset. The weather tests aggregate departures by city and MeteoSwiss reference timestamp before calculating p-values so a single weather measurement is not repeatedly treated as an independent observation.
+
+**Important finding:** The provisional five-minute classification target is currently highly imbalanced. The analysis therefore reports class balance for thresholds from one to five minutes and does not automatically treat five minutes as the final modelling threshold.
+
+**Lesson:** Statistical significance alone is not enough. Effect sizes, test assumptions, repeated measurement structure and target-class balance must be checked before interpretation or modelling.
