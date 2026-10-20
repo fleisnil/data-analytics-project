@@ -23,6 +23,8 @@ data/processed/*.parquet
 data/database/*.sqlite
 data/database/*.sqlite-*
 data/database/*.db
+data/database/*.duckdb
+data/database/*.duckdb-*
 
 # Generated analysis outputs
 results/figures/*
