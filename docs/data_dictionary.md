@@ -52,3 +52,16 @@ This file documents the main variables currently produced by the collection scri
 | `station_pressure_hpa` | Atmospheric pressure at barometric altitude (QFE) |
 | `weather_age_minutes` | Collection timestamp minus measurement timestamp |
 | `source_url` | MeteoSwiss source file used for the reading |
+
+
+## Geographic hub reference
+
+| Column | Meaning |
+| --- | --- |
+| `city` | Project region |
+| `latitude` | WGS84 latitude of the representative central rail hub |
+| `longitude` | WGS84 longitude of the representative central rail hub |
+| `reference_stop` | Hub used as geographic reference |
+| `coordinate_system` | Coordinate reference label (WGS84) |
+
+Coordinates support the hub-level geographic visualisation and do not represent the full spatial extent of each city's network.
