@@ -145,6 +145,12 @@ Build and validate the SQLite database:
 python src/database.py
 ```
 
+Build the additional DuckDB analytical database:
+
+```bash
+python src/database_duckdb.py
+```
+
 Generate the reproducible EDA tables and visualisations:
 
 ```bash
@@ -157,6 +163,12 @@ Run the inferential statistics and threshold checks:
 python src/statistics_analysis.py
 ```
 
+Run k-means clustering:
+
+```bash
+python src/clustering.py
+```
+
 Train and evaluate the regression models:
 
 ```bash
@@ -166,6 +178,7 @@ python src/model_regression.py
 Build the presentation-ready result summary and comparison figure:
 
 ```bash
+python src/geographic_analysis.py
 python src/final_results.py
 ```
 
@@ -206,9 +219,12 @@ For analysis on `main`, use:
 python src/sync_collection_data.py
 python src/build_dataset.py
 python src/database.py
+python src/database_duckdb.py
 python src/eda.py
 python src/statistics_analysis.py
 python src/model_regression.py
+python src/clustering.py
+python src/geographic_analysis.py
 python src/final_results.py
 ```
 
@@ -274,3 +290,12 @@ A geographic map can be added as a bonus analysis.
 Important data-processing decisions, limitations and join logic are documented in `docs/methodology.md`.
 
 AI-assisted work, including failed approaches and validation steps, is documented in `docs/ai_usage.md`.
+
+
+## Implemented bonus analyses
+
+- **DuckDB analytical database:** `src/database_duckdb.py` loads OJP and MeteoSwiss as independent tables, performs the cross-source time-aware join in SQL, and executes joins/aggregations from Python.
+- **K-means clustering:** `src/clustering.py` standardizes delay, cyclical time-of-day and weather variables, compares k=2..6 with silhouette score, profiles the chosen clusters and creates PCA/silhouette figures.
+- **Geographic analysis:** `src/geographic_analysis.py` combines WGS84 coordinates for the eight sampled central hubs with delay summaries and creates a geographic bubble map.
+
+Generated outputs remain reproducible and are ignored by Git.
