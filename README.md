@@ -283,7 +283,7 @@ Core visualisations will include:
 - best-model feature importance
 - MAE improvement vs baseline by region and transport mode
 
-A geographic map can be added as a bonus analysis.
+A geographic hub-level map is implemented as a bonus analysis.
 
 ## Reproducibility and AI use
 
