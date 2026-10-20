@@ -1,0 +1,9 @@
+city,latitude,longitude,reference_stop,coordinate_system
+Zürich,47.37818,8.54019,Zürich HB,WGS84
+Bern,46.94809,7.43913,Bern,WGS84
+Basel,47.54740,7.58956,Basel SBB,WGS84
+Luzern,47.05017,8.31018,Luzern,WGS84
+St. Gallen,47.42391,9.36909,St. Gallen,WGS84
+Lausanne,46.51679,6.62909,Lausanne,WGS84
+Genève,46.21022,6.14245,Genève,WGS84
+Lugano,46.00511,8.94694,Lugano,WGS84
