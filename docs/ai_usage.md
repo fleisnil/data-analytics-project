@@ -126,3 +126,14 @@ This document records meaningful AI assistance, including failures and correctio
 **Validation principle:** The synthesis reads only previously generated analysis outputs; it does not refit models or silently change the statistical results. The dated `docs/current_findings.md` file is explicitly labelled as a snapshot because data collection may continue.
 
 **Lesson:** Presentation conclusions should combine data quality, statistical evidence, effect sizes and model performance rather than selecting only the most favourable result.
+
+
+## 2026-10-20 — Bonus analyses: DuckDB, k-means and geographic analysis
+
+**Task:** Implement three optional extensions: a second analytical SQL database, k-means clustering and a geographic visualisation.
+
+**AI contribution:** DuckDB code was drafted to reproduce the OJP–MeteoSwiss no-look-ahead join in SQL and execute grouped SQL queries from Python. A k-means pipeline was added with standardisation, silhouette-based k selection, cluster profiling and PCA visualisation. A geographic analysis was added using WGS84 hub coordinates and regional delay summaries.
+
+**Validation approach:** Dedicated unit tests cover the DuckDB time-aware join, k-means mechanics and geographic summary/map generation. Live results must be regenerated after syncing the latest automated data.
+
+**Lesson:** Bonus methods should add interpretable evidence rather than exist only as technical demonstrations.
