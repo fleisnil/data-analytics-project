@@ -215,3 +215,22 @@ A fourth model, gradient boosting with `absolute_error` loss, is therefore added
 The script creates a compact comparison of MAE improvement over the median baseline by region and transport mode, a final key-findings table, and a Markdown summary. The summary explicitly keeps together evidence from descriptive analysis, statistical tests and held-out model evaluation so the final answer to the research question is not based on a single method.
 
 The current presentation draft is documented in `docs/current_findings.md`. Because automated collection may continue, the generated tables and figures should be rerun before final submission and the dated findings document should only be treated as a snapshot.
+
+
+## 15. DuckDB analytical database
+
+In addition to SQLite, `src/database_duckdb.py` creates `data/database/transport_weather.duckdb`. OJP and MeteoSwiss are loaded as independent tables. The SQL view `transport_weather_duckdb` performs a lateral time-aware join: each transport observation receives the newest weather observation from the same region at or before collection time, with a maximum age of 30 minutes.
+
+Named statements in `sql/duckdb_analysis_queries.sql` are executed from Python and include cross-source joins and `GROUP BY` aggregations. Validation checks ensure that the SQL join preserves transport row count, does not select future weather and does not use weather older than 30 minutes.
+
+## 16. K-means clustering
+
+`src/clustering.py` implements k-means in addition to supervised regression. Features are predicted delay, cyclical hour-of-day components and weather measurements. Missing weather values are median-imputed and all features are standardized.
+
+The analysis evaluates k=2..6 using silhouette score and chooses the highest-scoring k. It saves cluster profiles, city/mode composition and PCA/silhouette visualisations. Clusters are descriptive patterns and are not interpreted as causal groups.
+
+## 17. Geographic analysis
+
+`src/geographic_analysis.py` combines the integrated dataset with WGS84 coordinates of the eight representative central rail hubs in `data/reference/hub_coordinates.csv`. The resulting bubble map shows regional mean predicted delay and sample size.
+
+This is deliberately a hub-level geographic analysis. It must not be described as complete city-wide or nationwide network coverage.
