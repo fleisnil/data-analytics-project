@@ -172,3 +172,4 @@ archived_at_utc,ojp_file,ojp_rows,ojp_cities,ojp_stations,weather_file,weather_r
 2026-11-04T03:11:29+00:00,ojp_snapshot_20261104_031113.csv,479,8,16,weather_snapshot_20261104_031121.csv,8,8
 2026-11-04T11:30:32+00:00,ojp_snapshot_20261104_113017.csv,479,8,16,weather_snapshot_20261104_113026.csv,8,8
 2026-11-04T18:51:01+00:00,ojp_snapshot_20261104_185049.csv,478,8,16,weather_snapshot_20261104_185057.csv,8,8
+2026-11-05T00:19:42+00:00,ojp_snapshot_20261105_001929.csv,480,8,16,weather_snapshot_20261105_001937.csv,8,8
