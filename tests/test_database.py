@@ -1,6 +1,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 import sys
 
@@ -139,7 +140,7 @@ class DatabaseTest(unittest.TestCase):
         self.assertEqual(report["joined_rows"], 2)
         self.assertEqual(report["weather_matched_rows"], 2)
 
-        with sqlite3.connect(self.db_path) as connection:
+        with closing(sqlite3.connect(self.db_path)) as connection:
             zurich = connection.execute(
                 """
                 SELECT
@@ -159,6 +160,15 @@ class DatabaseTest(unittest.TestCase):
         )
         self.assertAlmostEqual(zurich[1], 18.4)
         self.assertAlmostEqual(zurich[2], 5.0, places=2)
+
+    def test_bad_schema_preserves_previous_database(self):
+        database.create_database(self.transport, self.weather, self.db_path, self.schema_path)
+        original = self.db_path.read_bytes()
+        bad_schema = self.db_path.with_suffix(".sql")
+        bad_schema.write_text("THIS IS NOT SQL;", encoding="utf-8")
+        with self.assertRaises(sqlite3.OperationalError):
+            database.create_database(self.transport, self.weather, self.db_path, bad_schema)
+        self.assertEqual(self.db_path.read_bytes(), original)
 
 
 if __name__ == "__main__":

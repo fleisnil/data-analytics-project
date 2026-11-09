@@ -96,6 +96,42 @@ MeteoSwiss reference timestamps are UTC.
 
 Generated raw/interim data are ignored by Git to prevent the repository from growing continuously. Small samples can be committed deliberately when needed for reproducibility.
 
+## Start in VS Code without typing commands
+
+Open the **main checkout itself** (the folder containing this README and
+`pyproject.toml`). Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+and restart VS Code if it was already open. Use **Terminal → Run Task…**:
+
+| Task | What happens |
+|---|---|
+| **Projekt einrichten** | Creates the Python 3.12 environment from the committed lockfile. |
+| **Projekt testen** (Ctrl+Shift+B) | Runs the unit tests and Ruff. No archived data or API token is needed. |
+| **Daten von GitHub holen** | Copies the group's already collected snapshots from the repository's archive branch. Internet and repository access are required, but no live API is contacted. |
+| **Startbereitschaft prüfen** | Checks local transport, weather, SQL and geographic inputs without changing results. |
+| **Analyse starten** | Runs dataset integration, SQLite, DuckDB, EDA, statistics, regression, clustering, geography and result synthesis using local inputs only. Regenerates results; preserve prior outputs separately if needed. |
+| **Ergebnisse prüfen** | Checks the input, code and output hashes recorded for the last completed run. It does not grade the data or verify scientific conclusions. |
+
+On a new checkout, run **Projekt einrichten → Daten von GitHub holen → Analyse
+starten**. Then open `results/analysis_summary.md` and press **Ctrl+Shift+V**
+for the results, a gallery of the current run's charts and links to the
+detailed analyses. A full run takes several minutes, depending on the machine
+and the archive size. No task runs automatically.
+
+Terminal equivalents from the repository root:
+
+```powershell
+uv sync --locked
+uv run --frozen python -m src.project_workflow test
+uv run --frozen python -m src.project_workflow sync
+uv run --frozen python -m src.project_workflow doctor
+uv run --frozen python -m src.project_workflow run
+uv run --frozen python -m src.project_workflow verify
+```
+
+To run the pilot notebook in VS Code, select this checkout's `.venv` kernel.
+The notebook is not part of the local analysis task. The scheduled collection
+workflow and its separate `requirements.txt` remain unchanged.
+
 ## Running the collectors
 
 Install dependencies:
@@ -184,7 +220,7 @@ python src/final_results.py
 
 This creates a compact MAE-improvement figure by region and transport mode, a final key-findings table and a generated Markdown summary for the presentation.
 
-The modelling script compares a median baseline, linear regression, random forest and an MAE-optimised gradient boosting regressor on a chronological 80/20 split. Entire collection batches are kept together when `batch_id` is available. Evaluation uses MAE, RMSE and R², plus performance comparisons by city and transport mode. The output also reports MAE improvement versus the median baseline. Permutation importance is calculated for the best-MAE non-baseline model; if the baseline remains best, no feature-importance claim is made.
+The modelling script compares a median baseline, linear regression, random forest and an MAE-optimised gradient boosting regressor. It holds out later complete Swiss-local collection dates where possible and never splits known collection batches. Up to three expanding windows inside the earlier development data choose the model by MAE. When these windows are unavailable, the median is the default rather than choosing from holdout scores. Additional benchmarks compare a training-only city/mode/time-of-day median and the same random forest with and without weather. The report includes MAE, RMSE, R², signed bias, tail error, subgroup checks and paired date-bootstrap intervals when enough test dates are available. See [methodology](docs/methodology.md).
 
 The statistics script writes reproducible CSV tables to `results/tables/`. It includes Spearman weather correlations with p-values, Kruskal-Wallis group comparisons with effect sizes, Chi-square tests with assumption checks, a wet-vs-dry comparison and delay-threshold class-balance sensitivity.
 

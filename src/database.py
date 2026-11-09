@@ -23,6 +23,8 @@ maximum gap.
 from __future__ import annotations
 
 import sqlite3
+import tempfile
+from contextlib import closing
 from pathlib import Path
 from typing import Dict
 
@@ -220,10 +222,15 @@ def create_database(
     weather_sql = prepare_weather_for_sql(weather)
     stations_sql = build_station_table(transport_sql, weather_sql)
 
-    if database_path.exists():
-        database_path.unlink()
+    with tempfile.TemporaryDirectory(prefix=".sqlite-build-", dir=database_path.parent) as temporary:
+        candidate = Path(temporary) / database_path.name
+        _write_database(candidate, schema_path, transport_sql, weather_sql, stations_sql)
+        validate_database(candidate)
+        candidate.replace(database_path)
 
-    with sqlite3.connect(database_path) as connection:
+
+def _write_database(database_path, schema_path, transport_sql, weather_sql, stations_sql):
+    with closing(sqlite3.connect(database_path)) as connection:
         transport_sql.to_sql(
             "transport_observations",
             connection,
@@ -251,7 +258,7 @@ def create_database(
 
 def validate_database(database_path: Path = DATABASE_PATH) -> dict:
     """Check integrity, row counts and SQL join cardinality."""
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         integrity = connection.execute(
             "PRAGMA integrity_check;"
         ).fetchone()[0]
@@ -310,7 +317,7 @@ def run_analysis_queries(
     queries = load_named_queries(queries_path)
     outputs: Dict[str, pd.DataFrame] = {}
 
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         for name, sql in queries.items():
             result = pd.read_sql_query(sql, connection)
             outputs[name] = result

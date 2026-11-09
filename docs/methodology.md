@@ -190,7 +190,34 @@ Four models are compared:
 - random forest regression for non-linear relationships and interactions
 - gradient boosting regression with absolute-error loss as a robust model for the strongly right-skewed target
 
-The split is chronological (80% earlier observations for training, 20% later observations for testing). When `batch_id` is available, complete collection batches are kept together so observations from one collection run cannot appear in both train and test.
+The holdout uses the later roughly 20% of Swiss-local **collection dates**,
+not 20% of rows, so counts can differ from 80/20. The model uses collection
+time to maintain strict chronological separation, regardless of OJP operating-day
+labels. A cutoff is rejected if any known `batch_id` spans it. If necessary a
+strictly ordered batch or timestamp boundary is used without splitting a known
+batch; that fallback is exploratory. With no safe cutoff the run fails instead
+of randomly splitting the data.
+
+Inside the development partition, up to three expanding-date windows refit
+preprocessing and estimators. Model selection minimises observation-weighted
+MAE on these disjoint validation windows, never on the final holdout. The
+windows need at least four development dates and 50 training rows; if there
+are no eligible windows the median is the predefined default. Test scores
+report the selected model as well as all candidates, but they should not be
+used to change the chosen model retrospectively.
+
+The city × mode × time-of-day median is an additional benchmark, estimated
+only from training groups with at least ten observations; smaller or unseen
+groups use the global training median. The Swiss-local scheduled-hour groups
+are 06–08 (morning peak), 09–15 (daytime), 16–18 (evening peak) and other
+hours (off peak). The random forest weather ablation uses the same rows,
+estimator settings and random seed, dropping all six MeteoSwiss variables.
+Weather represents the latest eligible measurement at collection time, not
+an exogenous intervention. A paired bootstrap resamples whole test collection
+dates (2,000 draws, 95% percentile intervals, minimum five dates). Its
+intervals are exploratory: they are conditional on the fits, do not account
+for serial dependence across dates and do not establish causality. Negative
+model-minus-reference differences favour the first model.
 
 Evaluation metrics are MAE, RMSE and R². MAE is the primary metric because delay values are right-skewed and contain occasional larger values. RMSE is reported to show sensitivity to larger errors, while R² provides a relative goodness-of-fit measure.
 
@@ -198,7 +225,12 @@ The core feature set contains operational factors (region, transport mode, rail/
 
 Target leakage is explicitly prevented. `estimated_departure`, `is_predicted_delayed_5min`, the target itself and other direct or near-direct target fields are excluded. High-cardinality journey/service identifiers are also excluded from the core model to reduce memorisation.
 
-Permutation importance is calculated on the held-out chronological test set for the best-MAE non-baseline model. Model errors are also reported separately by city and transport mode so the modelling component answers more than a pure prediction question.
+Permutation importance is reported on the holdout for the development-selected
+model only if it beats the global median there. Errors are also reported by
+city, transport mode and time of day, with test counts and a separate table
+flagging categories absent from training. These are subgroup prediction errors,
+not estimates of differences in predictor effects between groups. OJP
+`EstimatedTime` remains a short-term estimate, not an actual final delay.
 
 
 ### Regression model follow-up after first live run

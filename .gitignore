@@ -30,6 +30,10 @@ data/database/*.duckdb-*
 results/figures/*
 results/tables/*
 results/model/*
+results/analysis_summary.md
+results/run_manifest.json
+results/.workflow.lock
+results/.workflow-*/
 
 # Keep directory placeholders
 !results/figures/.gitkeep

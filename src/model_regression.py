@@ -8,9 +8,9 @@ Models:
 - random forest regression
 - gradient boosting with absolute-error loss
 
-The split is chronological rather than random. When batch_id is available,
-entire collection batches are kept together so the test set represents later
-data rather than a random sample of the same collection moments.
+The final holdout uses later Swiss-local collection dates where possible and
+never divides a known OJP collection batch. Model selection uses earlier
+expanding windows when available; the final holdout is reserved for evaluation.
 
 Important leakage rule:
 The target is predicted_delay_minutes. Estimated departure, the derived
@@ -47,6 +47,11 @@ from sklearn.preprocessing import (
 )
 
 
+if __package__:
+    from . import model_evaluation as evaluation
+else:
+    import model_evaluation as evaluation
+
 DATASET_PATH = Path("data/processed/analysis_dataset.csv")
 TABLE_DIR = Path("results/tables")
 FIGURE_DIR = Path("results/figures")
@@ -75,6 +80,8 @@ NUMERIC_CANDIDATES = [
     "wind_gust_kmh",
     "station_pressure_hpa",
 ]
+
+WEATHER_FEATURES = set(NUMERIC_CANDIDATES) - {"hour", "weekend"}
 
 EXCLUDED_FEATURES = {
     "predicted_delay_minutes": "Target variable.",
@@ -182,9 +189,10 @@ def prepare_dataset(
                 errors="coerce",
             )
 
-    out = out.dropna(
-        subset=[TIME_COLUMN, TARGET_COLUMN]
-    ).copy()
+    available_numeric = [c for c in NUMERIC_CANDIDATES if c in out]
+    out[available_numeric] = out[available_numeric].replace([np.inf, -np.inf], np.nan)
+    out = out.dropna(subset=[TIME_COLUMN, TARGET_COLUMN]).copy()
+    out = out[np.isfinite(out[TARGET_COLUMN])].copy()
 
     categorical = [
         column
@@ -209,110 +217,7 @@ def temporal_split(
     df: pd.DataFrame,
     train_fraction: float = TRAIN_FRACTION,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str]:
-    if not 0 < train_fraction < 1:
-        raise ValueError(
-            "train_fraction must be between 0 and 1."
-        )
-
-    if (
-        "batch_id" in df.columns
-        and df["batch_id"].notna().sum() > 1
-    ):
-        batch_times = (
-            df.dropna(subset=["batch_id"])
-            .groupby("batch_id")[TIME_COLUMN]
-            .min()
-            .sort_values()
-        )
-
-        if len(batch_times) >= 2:
-            split_index = int(
-                np.floor(
-                    len(batch_times)
-                    * train_fraction
-                )
-            )
-            split_index = max(
-                1,
-                min(
-                    len(batch_times) - 1,
-                    split_index,
-                ),
-            )
-
-            train_batches = set(
-                batch_times.index[:split_index]
-            )
-
-            train = df[
-                df["batch_id"].isin(
-                    train_batches
-                )
-            ].copy()
-            test = df[
-                ~df["batch_id"].isin(
-                    train_batches
-                )
-            ].copy()
-
-            if len(train) and len(test):
-                return (
-                    train.sort_values(
-                        TIME_COLUMN
-                    ),
-                    test.sort_values(
-                        TIME_COLUMN
-                    ),
-                    "batch_id",
-                )
-
-    ordered = df.sort_values(
-        TIME_COLUMN
-    ).copy()
-    unique_times = (
-        ordered[TIME_COLUMN]
-        .dropna()
-        .drop_duplicates()
-        .sort_values()
-    )
-
-    if len(unique_times) < 2:
-        raise ValueError(
-            "At least two distinct collection times are required "
-            "for a chronological split."
-        )
-
-    split_index = int(
-        np.floor(
-            len(unique_times)
-            * train_fraction
-        )
-    )
-    split_index = max(
-        1,
-        min(
-            len(unique_times) - 1,
-            split_index,
-        ),
-    )
-
-    cutoff = unique_times.iloc[
-        split_index
-    ]
-
-    train = ordered[
-        ordered[TIME_COLUMN] < cutoff
-    ].copy()
-    test = ordered[
-        ordered[TIME_COLUMN] >= cutoff
-    ].copy()
-
-    if not len(train) or not len(test):
-        raise ValueError(
-            "Chronological split produced an empty train or test set."
-        )
-
-    return train, test, "timestamp"
+    return evaluation.chronological_holdout(df, train_fraction)
 
 
 def make_preprocessor(
@@ -326,7 +231,7 @@ def make_preprocessor(
             (
                 "imputer",
                 SimpleImputer(
-                    strategy="most_frequent"
+                    strategy="most_frequent", keep_empty_features=True
                 ),
             ),
             (
@@ -343,7 +248,7 @@ def make_preprocessor(
         (
             "imputer",
             SimpleImputer(
-                strategy="median"
+                strategy="median", keep_empty_features=True
             ),
         ),
     ]
@@ -477,10 +382,9 @@ def regression_metrics(
                 )
             )
         ),
-        "r2": r2_score(
-            y_true,
-            y_pred,
-        ),
+        "r2": r2_score(y_true, y_pred) if len(y_true) >= 2 and y_true.nunique() > 1 else np.nan,
+        "mean_error_pred_minus_target": float(np.mean(y_pred - y_true.to_numpy())),
+        "p90_absolute_error": float(np.quantile(np.abs(y_pred - y_true.to_numpy()), 0.9)),
     }
 
 
@@ -670,6 +574,8 @@ def permutation_importance_table(
 
 def build_selection_summary(
     metrics_table: pd.DataFrame,
+    selected_model: str | None = None,
+    selected_by: str = "exploratory_holdout_ranking",
 ) -> pd.DataFrame:
     baseline_mae = float(
         metrics_table.loc[
@@ -680,9 +586,9 @@ def build_selection_summary(
     )
 
     best_row = (
-        metrics_table.sort_values(
-            "mae"
-        ).iloc[0]
+        metrics_table.loc[metrics_table["model"].eq(selected_model)].iloc[0]
+        if selected_model is not None
+        else metrics_table.sort_values("mae", kind="stable").iloc[0]
     )
 
     best_mae = float(
@@ -694,7 +600,7 @@ def build_selection_summary(
             baseline_mae
             - best_mae
         )
-        / baseline_mae
+        / (baseline_mae if baseline_mae else np.nan)
         if baseline_mae
         else np.nan
     )
@@ -703,6 +609,7 @@ def build_selection_summary(
         [
             {
                 "primary_metric": "MAE",
+                "selected_by": selected_by,
                 "best_model": (
                     best_row["model"]
                 ),
@@ -801,7 +708,7 @@ def save_figures(
         f"{best_model_name} prediction (minutes)"
     )
     plt.title(
-        "Best-MAE model: predicted vs observed delay"
+        "Selected model: predicted vs observed delay"
     )
     plt.tight_layout()
     plt.savefig(
@@ -834,7 +741,7 @@ def save_figures(
         "Test observations"
     )
     plt.title(
-        "Best-MAE model residual distribution"
+        "Selected model residual distribution"
     )
     plt.tight_layout()
     plt.savefig(
@@ -868,7 +775,7 @@ def save_figures(
         )
         plt.ylabel("Feature")
         plt.title(
-            "Best-model permutation importance"
+            "Selected-model permutation importance"
         )
         plt.tight_layout()
         plt.savefig(
@@ -878,6 +785,52 @@ def save_figures(
             bbox_inches="tight",
         )
         plt.close()
+
+
+def _fit_predict_models(train, test, categorical, numeric, rf_estimators, gb_estimators):
+    """Fit on training rows only; return comparable predictions on identical evaluation rows."""
+    models = build_models(categorical, numeric, random_forest_estimators=rf_estimators,
+                          gradient_boosting_estimators=gb_estimators)
+    predictions = {}
+    for name, model in models.items():
+        features = categorical + numeric
+        fit_x = np.zeros((len(train), 1)) if name == "median_baseline" else train[features]
+        test_x = np.zeros((len(test), 1)) if name == "median_baseline" else test[features]
+        model.fit(fit_x, train[TARGET_COLUMN])
+        predictions[name] = model.predict(test_x)
+    predictions["group_median"], fallback = evaluation.group_median(train, test)
+    no_weather = [column for column in numeric if column not in WEATHER_FEATURES]
+    usable_weather = any(train[column].notna().any() for column in numeric
+                         if column in WEATHER_FEATURES)
+    if usable_weather and (categorical or no_weather):
+        ablation = build_models(categorical, no_weather, random_forest_estimators=rf_estimators,
+                                gradient_boosting_estimators=gb_estimators)["random_forest"]
+        columns = categorical + no_weather
+        ablation.fit(train[columns], train[TARGET_COLUMN])
+        predictions["random_forest_no_weather"] = ablation.predict(test[columns])
+    return models, predictions, fallback
+
+
+def _rolling_validation(development, categorical, numeric, rf_estimators, gb_estimators):
+    rows = []
+    for fold, (train, validation) in enumerate(evaluation.expanding_folds(development), 1):
+        _, predictions, _ = _fit_predict_models(
+            train, validation, categorical, numeric, rf_estimators, gb_estimators,
+        )
+        for name, predicted in predictions.items():
+            rows.append({
+                "fold": fold, "model": name,
+                "train_rows": len(train), "validation_rows": len(validation),
+                "train_last_date": train[evaluation.DAY].max(),
+                "validation_first_date": validation[evaluation.DAY].min(),
+                "validation_last_date": validation[evaluation.DAY].max(),
+                **regression_metrics(validation[TARGET_COLUMN], predicted),
+            })
+    return pd.DataFrame(rows, columns=[
+        "fold", "model", "train_rows", "validation_rows", "train_last_date",
+        "validation_first_date", "validation_last_date", "mae", "rmse", "r2",
+        "mean_error_pred_minus_target", "p90_absolute_error",
+    ])
 
 
 def run_regression_analysis(
@@ -900,87 +853,34 @@ def run_regression_analysis(
         temporal_split(clean)
     )
 
-    x_train = train[
-        feature_columns
-    ].copy()
-    y_train = train[
-        TARGET_COLUMN
-    ].copy()
-    x_test = test[
-        feature_columns
-    ].copy()
-    y_test = test[
-        TARGET_COLUMN
-    ].copy()
-
-    models = build_models(
-        categorical,
-        numeric,
-        random_forest_estimators=(
-            random_forest_estimators
-        ),
-        gradient_boosting_estimators=(
-            gradient_boosting_estimators
-        ),
+    x_test = test[feature_columns].copy()
+    y_test = test[TARGET_COLUMN].copy()
+    validation = _rolling_validation(
+        train, categorical, numeric, random_forest_estimators, gradient_boosting_estimators,
     )
+    models, comparison_predictions, fallback = _fit_predict_models(
+        train, test, categorical, numeric, random_forest_estimators, gradient_boosting_estimators,
+    )
+    predictions = test[[c for c in [
+        TIME_COLUMN, evaluation.DAY, "batch_id", "city", "transport_mode", "day_period", "station_id",
+    ] if c in test]].copy()
+    predictions["actual_delay"] = y_test.to_numpy()
+    predictions["group_median_fallback"] = fallback
+    for name, values in comparison_predictions.items():
+        predictions[f"pred_{name}"] = values
 
-    predictions = test[
-        [
-            column
-            for column in [
-                TIME_COLUMN,
-                "batch_id",
-                "city",
-                "transport_mode",
-            ]
-            if column in test.columns
-        ]
-    ].copy()
-    predictions[
-        "actual_delay"
-    ] = y_test.to_numpy()
-
-    metrics_rows = []
-
-    for model_name, model in (
-        models.items()
-    ):
-        if model_name == (
-            "median_baseline"
-        ):
-            x_train_fit = np.zeros(
-                (len(x_train), 1)
-            )
-            x_test_fit = np.zeros(
-                (len(x_test), 1)
-            )
-        else:
-            x_train_fit = x_train
-            x_test_fit = x_test
-
-        model.fit(
-            x_train_fit,
-            y_train,
-        )
-        y_pred = model.predict(
-            x_test_fit
-        )
-
-        predictions[
-            f"pred_{model_name}"
-        ] = y_pred
-
-        metrics_rows.append(
-            {
-                "model": model_name,
-                "train_rows": len(train),
-                "test_rows": len(test),
-                **regression_metrics(
-                    y_test,
-                    y_pred,
-                ),
-            }
-        )
+    metrics_rows = [
+        {"model": name, "train_rows": len(train), "test_rows": len(test),
+         **regression_metrics(y_test, comparison_predictions[name])}
+        for name in models
+    ]
+    benchmark_metrics = pd.DataFrame([
+        {"model": name, **regression_metrics(y_test, values)}
+        for name, values in comparison_predictions.items()
+    ])
+    benchmark_metrics["test_rows"] = len(test)
+    benchmark_metrics["test_dates"] = test[evaluation.DAY].nunique()
+    benchmark_metrics["group_fallback_rows"] = int(fallback.sum())
 
     metrics_table = pd.DataFrame(
         metrics_rows
@@ -1020,11 +920,22 @@ def run_regression_analysis(
         ]
     ].round(4)
 
-    selection_summary = (
-        build_selection_summary(
-            metrics_table
+    if validation.empty:
+        # Do not tune on the holdout just because the development dates are sparse.
+        selection_summary = build_selection_summary(
+            metrics_table, "median_baseline", "median_default_insufficient_development_dates",
         )
-    )
+    else:
+        candidates = validation[validation["model"].isin(models)]
+        # Each prediction contributes once across disjoint validation windows.
+        scores = candidates.assign(
+            absolute_error=candidates["mae"] * candidates["validation_rows"],
+        ).groupby("model")[["absolute_error", "validation_rows"]].sum()
+        mean_errors = scores["absolute_error"] / scores["validation_rows"]
+        selection_summary = build_selection_summary(
+            metrics_table, str(mean_errors.idxmin()), "expanding_development_dates",
+        )
+        selection_summary["development_mae"] = float(mean_errors.min())
     best_model_name = str(
         selection_summary.loc[
             0,
@@ -1032,9 +943,7 @@ def run_regression_analysis(
         ]
     )
 
-    if best_model_name == (
-        "median_baseline"
-    ):
+    if best_model_name == "median_baseline" or not bool(selection_summary.at[0, "beats_baseline"]):
         importance = pd.DataFrame(
             columns=[
                 "feature",
@@ -1103,7 +1012,23 @@ def run_regression_analysis(
         exist_ok=True,
     )
 
+    pairs = [(best_model_name, "group_median")]
+    if best_model_name != "median_baseline":
+        pairs.append((best_model_name, "median_baseline"))
+    if "random_forest_no_weather" in comparison_predictions:
+        pairs.append(("random_forest", "random_forest_no_weather"))
+    paired = pd.DataFrame([
+        row for model, reference in pairs
+        for row in evaluation.paired_day_comparison(predictions, model, reference)
+    ])
     outputs = {
+        "model_temporal_validation": validation,
+        "model_holdout_benchmarks": benchmark_metrics,
+        "model_paired_comparisons": paired,
+        "model_holdout_coverage": evaluation.coverage_table(train, test),
+        "model_metrics_by_day_period": grouped_metrics(
+            predictions, "day_period", list(comparison_predictions),
+        ),
         "model_regression_metrics": (
             metrics_table
         ),

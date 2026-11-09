@@ -2,6 +2,33 @@
 
 This document records meaningful AI assistance, including failures and corrections. It is intended to support the required reflection on AI use in the Data Analytics project.
 
+## 2026-11-09 — Port reusable improvements from colin to main
+
+**AI contribution:** Adapted the click-to-run workflow, locked environment,
+run evidence, result gallery and time-aware evaluation to the existing
+OJP/MeteoSwiss scripts. No collection workflow, API credential or archived
+dataset was changed.
+
+**What did not work:** The existing SQLite test passed its data assertions
+but failed on Windows while removing a database that was still open.
+The connection context manager handles transactions but does not close the
+handle. Explicit closure and validated temporary database builds address
+that problem. The two branches also had different targets and input schemas,
+so copying the other branch's pipeline or comparing its model scores directly
+would have been misleading.
+
+**Validation:** On Windows, all 21 tests and Ruff passed. An offline analysis
+of archived snapshot commit `4cda8d3` produced 18,362 OJP observations, 17,516
+weather matches, three development windows, a nine-date holdout and 20
+charts. Input, code and output hash checks passed. The selected gradient
+boosting model improved MAE versus the global median, but the paired MAE
+interval crossed zero versus the stronger group median; the weather
+ablation also did not show a clear MAE improvement.
+
+**Lesson:** Treat a clean run as engineering evidence, not scientific
+validation. Review date coverage, same-row comparisons and OJP estimate
+semantics before drawing conclusions.
+
 ## 2026-09-21 / 2026-09-22 — OJP request construction
 
 **Task:** Build a first OJP 2.0 request for departure data.

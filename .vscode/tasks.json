@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "options": { "cwd": "${workspaceFolder}" },
+  "presentation": { "reveal": "always", "panel": "shared" },
+  "tasks": [
+    {
+      "label": "Projekt einrichten",
+      "detail": "Richtet Python und Pakete aus uv.lock ein. Sammelt keine Daten.",
+      "type": "process", "command": "uv", "args": ["sync", "--frozen"], "problemMatcher": []
+    },
+    {
+      "label": "Projekt testen",
+      "detail": "Startet Tests und Codeprüfung, auch ohne echte Daten.",
+      "type": "process", "command": "uv",
+      "args": ["run", "--frozen", "python", "-m", "src.project_workflow", "test"],
+      "group": { "kind": "build", "isDefault": true }, "problemMatcher": []
+    },
+    {
+      "label": "Daten von GitHub holen",
+      "detail": "Synchronisiert bereits archivierte OJP- und MeteoSwiss-Daten. Keine Live-API-Anfragen.",
+      "type": "process", "command": "uv",
+      "args": ["run", "--frozen", "python", "-m", "src.project_workflow", "sync"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Startbereitschaft prüfen",
+      "detail": "Prüft lokale Eingaben, ohne Daten oder Berichte zu ändern.",
+      "type": "process", "command": "uv",
+      "args": ["run", "--frozen", "python", "-m", "src.project_workflow", "doctor"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Analyse starten",
+      "detail": "Baut Berichte, Grafiken und Datenbanken aus lokalen Daten neu. Keine API-Anfragen.",
+      "type": "process", "command": "uv",
+      "args": ["run", "--frozen", "python", "-m", "src.project_workflow", "run"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Ergebnisse prüfen",
+      "detail": "Prüft anhand von SHA-256, ob Eingaben, Code und Ergebnisse noch zum letzten Lauf passen.",
+      "type": "process", "command": "uv",
+      "args": ["run", "--frozen", "python", "-m", "src.project_workflow", "verify"],
+      "problemMatcher": []
+    }
+  ]
+}

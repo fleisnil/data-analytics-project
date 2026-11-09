@@ -296,7 +296,7 @@ def build_key_findings(
         {
             "topic": "model",
             "finding": (
-                f"{best_model} has the lowest MAE: "
+                f"{best_model} holdout MAE: "
                 f"{float(best_row['mae']):.4f} min"
             ),
             "detail": (
@@ -304,7 +304,7 @@ def build_key_findings(
                 f"MAE improvement vs baseline; "
                 f"R2={float(best_row['r2']):.4f}, "
                 f"baseline RMSE={float(baseline_row['rmse']):.4f}, "
-                f"best-model RMSE={float(best_row['rmse']):.4f}"
+                f"selected-model RMSE={float(best_row['rmse']):.4f}"
             ),
         },
     ]
@@ -426,6 +426,12 @@ def build_summary_markdown(
             "best_model",
         ]
     )
+    selection = model_selection.iloc[0]
+    selection_method = selection.get("selected_by", "legacy_holdout_ranking")
+    selection_text = {
+        "expanding_development_dates": "selected by MAE on earlier expanding-date validation windows",
+        "median_default_insufficient_development_dates": "used as the default because too few development dates were available",
+    }.get(selection_method, "reported by the legacy holdout ranking")
 
     top_cities = city_table.head(
         4
@@ -442,8 +448,8 @@ def build_summary_markdown(
 
     if importance.empty:
         importance_text = (
-            "No model-based feature importance is interpreted because "
-            "the baseline remains the best-MAE model."
+            "No feature importance is interpreted: the selected model is the median "
+            "baseline or did not improve on that baseline on the holdout."
         )
     else:
         top_features = importance.head(
@@ -471,7 +477,8 @@ Which operational, temporal and weather-related factors are associated with publ
 
 ## Model interpretation
 
-The best model by the pre-defined primary metric MAE is **{best_model}**. Its improvement is not uniform across the sample.
+The reported model is **{best_model}**, {selection_text}. See the key evidence for its
+actual performance on later data. A model selected earlier need not have the lowest holdout error.
 
 Largest regional MAE improvements: {top_city_text}.
 
@@ -481,9 +488,13 @@ Top permutation-importance features: {importance_text}.
 
 ## Presentation conclusion
 
-Operational and regional factors are more informative than the observed weather variables for explaining and predicting short-term OJP departure-delay estimates. The best regression model improves typical absolute prediction error relative to a simple median baseline, but RMSE/R2 results show that larger and unusual delays remain difficult to predict.
+Use the group effect sizes and the held-out metrics above to assess operational
+and regional patterns. MAE, RMSE and R² measure different aspects of performance.
+Subgroup error differences do not estimate differences in the effects of predictors.
 
-Weather variables show some weak statistical associations, but they add little incremental predictive value in the best model. Precipitation in particular is not supported as an important factor in the current sample.
+Use the paired weather ablation in the analysis overview to assess whether weather
+improved the random forest on the same test rows. This comparison is distinct from
+weather correlations and does not show that weather causes delays.
 
 Results describe associations in the observed central-hub sample. They do not establish causal effects, and OJP EstimatedTime is a real-time estimate rather than a realised final delay.
 """

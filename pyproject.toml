@@ -1,0 +1,28 @@
+[project]
+name = "swiss-public-transport-delays"
+version = "0.1.0"
+description = "OJP and MeteoSwiss delay analytics for Swiss transport hubs"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "duckdb>=1.0,<2",
+    "matplotlib>=3.8,<4",
+    "numpy>=1.26,<3",
+    "pandas>=2.0,<3",
+    "requests>=2.31,<3",
+    "scikit-learn>=1.5,<2",
+    "scipy>=1.13,<2",
+    "sqlalchemy>=2,<3",
+    "tzdata>=2025.2",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.12,<1", "ipykernel>=6,<8"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E9", "F"]

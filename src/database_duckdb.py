@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import tempfile
 from pathlib import Path
 from typing import Dict
 import duckdb
@@ -35,7 +36,13 @@ def prepare_weather(df):
 def create_database(transport,weather,database_path=DATABASE_PATH,schema_path=SCHEMA_PATH):
     if not schema_path.exists(): raise FileNotFoundError(f"Missing {schema_path}")
     database_path.parent.mkdir(parents=True,exist_ok=True)
-    if database_path.exists(): database_path.unlink()
+    with tempfile.TemporaryDirectory(prefix=".duckdb-build-", dir=database_path.parent) as temporary:
+        candidate = Path(temporary) / database_path.name
+        _write_database(transport, weather, candidate, schema_path)
+        validate_database(candidate)
+        candidate.replace(database_path)
+
+def _write_database(transport, weather, database_path, schema_path):
     t=prepare_transport(transport); w=prepare_weather(weather); s=build_station_table(t,w)
     con=duckdb.connect(str(database_path))
     try:

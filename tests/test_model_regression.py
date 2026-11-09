@@ -235,6 +235,18 @@ class RegressionModelTest(
                     / "12_regression_model_mae.png"
                 ).exists()
             )
+            validation = outputs["model_temporal_validation"]
+            self.assertFalse(validation.empty)
+            self.assertIn("random_forest_no_weather", set(validation["model"]))
+            self.assertTrue((validation["train_last_date"] < validation["validation_first_date"]).all())
+            predictions = pd.read_csv(model_dir / "regression_test_predictions.csv")
+            self.assertLess(validation["validation_last_date"].max(), predictions["collection_date"].min())
+            self.assertIn("pred_group_median", predictions)
+            self.assertIn("pred_random_forest_no_weather", predictions)
+            self.assertEqual(outputs["model_selection_summary"].at[0, "selected_by"],
+                             "expanding_development_dates")
+            self.assertTrue((outputs["model_paired_comparisons"]["status"] ==
+                             "insufficient_test_dates").all())
 
             manifest = outputs[
                 "model_feature_manifest"
@@ -277,7 +289,7 @@ class RegressionModelTest(
 
         self.assertEqual(
             split_method,
-            "batch_id",
+            "collection_date",
         )
         self.assertTrue(
             set(
