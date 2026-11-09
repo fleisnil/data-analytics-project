@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
-from matplotlib.transforms import Bbox
+from matplotlib.path import Path as PlotPath
 
 DATASET_PATH = Path("data/processed/analysis_dataset.csv")
 COORDINATE_PATH = Path("data/reference/hub_coordinates.csv")
@@ -48,20 +48,27 @@ def build_city_summary(data, coords):
     out[nums]=out[nums].round(3)
     return out.sort_values("mean_predicted_delay_min",ascending=False).reset_index(drop=True)
 
+def _distance_to_segment(point, segment):
+    start, end = segment.vertices
+    direction = end - start
+    t = np.clip(np.dot(point - start, direction) / np.dot(direction, direction), 0, 1)
+    return np.linalg.norm(point - (start + t * direction))
+
+
 def _place_hub_labels(ax, hubs, sizes):
     """Measure the final text and bubbles in display pixels, after layout is fixed."""
     renderer = ax.figure.canvas.get_renderer()
     to_pixels = renderer.points_to_pixels
     plot = ax.bbox.padded(-to_pixels(5))
-    bubbles = []
-    for hub, size in zip(hubs, sizes):
-        x, y = ax.transData.transform((hub.longitude, hub.latitude))
-        radius = to_pixels(np.sqrt(size) / 2 + 0.35)  # Marker radius and half the edge stroke.
-        bubbles.append(Bbox.from_extents(x - radius, y - radius, x + radius, y + radius))
-
-    directions = ((1, 1), (-1, 1), (1, -1), (-1, -1), (1, 0), (-1, 0), (0, 1), (0, -1))
+    # Scatter marker sizes are points²; include half the outline in the visual radius.
+    bubbles = [
+        (ax.transData.transform((hub.longitude, hub.latitude)), np.sqrt(size) / 2 + .35)
+        for hub, size in zip(hubs, sizes)
+    ]
+    # Prefer a label beside its marker, then above/below, then diagonally.
+    directions = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1))
     options = []
-    for hub, size in zip(hubs, sizes):
+    for hub, (center, radius) in zip(hubs, bubbles):
         annotation = ax.annotate(
             f"{hub.city}\n{hub.mean_predicted_delay_min:.2f} min",
             (hub.longitude, hub.latitude),
@@ -70,21 +77,41 @@ def _place_hub_labels(ax, hubs, sizes):
             bbox={"facecolor": "white", "edgecolor": "none", "pad": 1.2},
         )
         candidates = []
-        for extra in (0, 5, 11, 18):
-            gap = np.sqrt(size) / 2 + 5 + extra
+        for extra in (0, 4, 9, 16):
+            gap = radius + 6 + extra
             for dx, dy in directions:
-                offset = (dx * gap, dy * gap)
+                distance = gap / np.hypot(dx, dy)
+                offset = (dx * distance, dy * distance)
                 ha = {-1: "right", 0: "center", 1: "left"}[dx]
                 va = {-1: "top", 0: "center", 1: "bottom"}[dy]
                 annotation.set_position(offset)
                 annotation.set_ha(ha)
                 annotation.set_va(va)
-                box = annotation.get_window_extent(renderer).padded(to_pixels(2))
+                text_box = annotation.get_window_extent(renderer)
+                box = text_box.padded(to_pixels(2))
                 if not (plot.contains(box.x0, box.y0) and plot.contains(box.x1, box.y1)):
                     continue
-                if any(box.overlaps(bubble) for bubble in bubbles):
+                if any(
+                    np.linalg.norm(point - np.clip(point, box.min, box.max)) <= to_pixels(other_radius)
+                    for point, other_radius in bubbles
+                ):
                     continue
-                candidates.append((offset, ha, va, box))
+                # Join the bubble rim to the nearest edge of the label's white background.
+                label_background = text_box.padded(to_pixels(1.2))
+                end = np.clip(center, label_background.min, label_background.max)
+                direction = end - center
+                length = np.linalg.norm(direction)
+                start_distance = to_pixels(radius + .8)
+                if length <= start_distance:
+                    continue
+                start = center + direction * (start_distance / length)
+                connector = PlotPath([start, end])
+                if any(
+                    _distance_to_segment(point, connector) <= to_pixels(other_radius + .45)
+                    for point, other_radius in bubbles
+                ):
+                    continue
+                candidates.append((offset, ha, va, box, connector))
         options.append((annotation, candidates))
 
     occupied = []
@@ -92,12 +119,21 @@ def _place_hub_labels(ax, hubs, sizes):
     # Give the most constrained hubs first choice, then use the nearest available slot.
     for index in sorted(range(len(hubs)), key=lambda i: len(options[i][1])):
         annotation, candidates = options[index]
-        for offset, ha, va, box in candidates:
-            if not any(box.overlaps(other) for other in occupied):
+        for offset, ha, va, box, connector in candidates:
+            if not any(
+                box.overlaps(other)
+                or connector.intersects_bbox(other, filled=False)
+                or other_line.intersects_bbox(box, filled=False)
+                or connector.intersects_path(other_line, filled=False)
+                for other, other_line in occupied
+            ):
                 annotation.set_position(offset)
                 annotation.set_ha(ha)
                 annotation.set_va(va)
-                occupied.append(box)
+                vertices = ax.transData.inverted().transform(connector.vertices)
+                ax.plot(*vertices.T, color="#475569", linewidth=.85, zorder=3.5,
+                        scalex=False, scaley=False, gid=f"hub-label:{hubs[index].city}")
+                occupied.append((box, connector))
                 break
         else:
             annotation.remove()
